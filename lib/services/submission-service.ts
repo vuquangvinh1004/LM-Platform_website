@@ -1,5 +1,3 @@
-import { read, utils } from "xlsx";
-
 import {
   completeImportJobRepository,
   createImportJobRepository,
@@ -18,6 +16,7 @@ import {
   normalizeGoogleFormWebhookPayload,
   normalizeMicrosoftFormWebhookPayload,
 } from "@/lib/integrations";
+import { normalizeSpreadsheetHeader, readSpreadsheetMatrixFromBase64, readSpreadsheetMatrixFromCsv } from "@/lib/spreadsheets/spreadsheet-utils";
 import type { Paginated } from "@/lib/types/pagination";
 import type { ServiceResult } from "@/lib/types/service-result";
 import type { ImportJobStatus, SubmissionImportResult, SubmissionImportRowError, SubmissionSummary } from "@/lib/types/submission";
@@ -52,19 +51,6 @@ const sourceLabelHeaderAliases = new Set(["source", "nguon"]);
 const noteHeaderAliases = new Set(["note", "notes", "ghi chu"]);
 const attemptHeaderAliases = new Set(["attempt", "attempt_number", "attempt number", "lan nop", "lan_nop"]);
 const externalResponseIdHeaderAliases = new Set(["external response id", "external_response_id", "response id", "response_id"]);
-
-function normalizeCsvHeader(value: string): string {
-  return value
-    .trim()
-    .replace(/^\uFEFF/, "")
-    .toLowerCase()
-    .replace(/đ/g, "d")
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .replace(/^"+|"+$/g, "")
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ");
-}
 
 function parseNumber(input: string): number | undefined {
   const normalized = input.trim();
@@ -142,29 +128,10 @@ function parseIsoDatetime(input: string): string | undefined {
   return parsed.toISOString();
 }
 
-function parseSubmissionRowsFromWorkbook(
-  workbook: ReturnType<typeof read>,
-  invalidFileMessage: string,
+function parseSubmissionRowsFromMatrix(
+  matrix: string[][],
 ): { rows: SubmissionImportRow[]; errors: SubmissionImportRowError[] } {
-  const firstSheetName = workbook.SheetNames[0];
-
-  if (!firstSheetName) {
-    throw new Error(invalidFileMessage);
-  }
-
-  const worksheet = workbook.Sheets[firstSheetName];
-  const matrix = utils.sheet_to_json<string[]>(worksheet, {
-    header: 1,
-    raw: false,
-    defval: "",
-    blankrows: false,
-  }) as string[][];
-
-  if (matrix.length < 2) {
-    throw new Error("Tệp kết quả cần có ít nhất một dòng dữ liệu.");
-  }
-
-  const headerRow = matrix[0]?.map((cell) => normalizeCsvHeader(String(cell ?? ""))) ?? [];
+  const headerRow = matrix[0]?.map((cell) => normalizeSpreadsheetHeader(String(cell ?? ""))) ?? [];
   const emailIndex = headerRow.findIndex((value) => emailHeaderAliases.has(value));
   const studentCodeIndex = headerRow.findIndex((value) => studentCodeHeaderAliases.has(value));
   const fullNameIndex = headerRow.findIndex((value) => fullNameHeaderAliases.has(value));
@@ -307,13 +274,13 @@ function parseSubmissionRowsFromWorkbook(
 }
 
 function parseSubmissionRowsFromCsv(csvContent: string): { rows: SubmissionImportRow[]; errors: SubmissionImportRowError[] } {
-  const workbook = read(csvContent, { type: "string", raw: false });
-  return parseSubmissionRowsFromWorkbook(workbook, "Tệp CSV không hợp lệ hoặc không có dữ liệu.");
+  const matrix = readSpreadsheetMatrixFromCsv(csvContent, "Tệp CSV không hợp lệ hoặc không có dữ liệu.");
+  return parseSubmissionRowsFromMatrix(matrix);
 }
 
 function parseSubmissionRowsFromSpreadsheet(fileContentBase64: string): { rows: SubmissionImportRow[]; errors: SubmissionImportRowError[] } {
-  const workbook = read(Buffer.from(fileContentBase64, "base64"), { type: "buffer", raw: false });
-  return parseSubmissionRowsFromWorkbook(workbook, "Tệp XLS/XLSX không hợp lệ hoặc không có dữ liệu.");
+  const matrix = readSpreadsheetMatrixFromBase64(fileContentBase64, "Tệp XLS/XLSX không hợp lệ hoặc không có dữ liệu.");
+  return parseSubmissionRowsFromMatrix(matrix);
 }
 
 function resolveImportStatus(successRows: number, errorRows: number): ImportJobStatus {

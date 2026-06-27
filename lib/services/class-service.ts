@@ -26,7 +26,7 @@ import {
   listClassesForUserSchema,
   listClassMembersSchema,
 } from "@/lib/validators/class-validator";
-import { read, utils } from "xlsx";
+import { normalizeSpreadsheetHeader, readSpreadsheetMatrixFromCsv } from "@/lib/spreadsheets/spreadsheet-utils";
 
 export type CreateClassInput = {
   courseId: string;
@@ -146,26 +146,10 @@ function toPaginatedResult<T>(repositoryResult: { items: T[]; totalItems: number
   };
 }
 
-function normalizeCsvHeader(value: string): string {
-  return value.trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
-}
-
 function parseStudentsFromCsv(csvContent: string): AddStudentsToClassInput["students"] {
-  const workbook = read(csvContent, { type: "string", raw: false });
-  const firstSheetName = workbook.SheetNames[0];
+  const rows = readSpreadsheetMatrixFromCsv(csvContent, "Tệp CSV không hợp lệ hoặc không có dữ liệu.");
 
-  if (!firstSheetName) {
-    throw new Error("Tệp CSV không hợp lệ hoặc không có dữ liệu.");
-  }
-
-  const worksheet = workbook.Sheets[firstSheetName];
-  const rows = utils.sheet_to_json<string[]>(worksheet, { header: 1, raw: false, defval: "", blankrows: false }) as string[][];
-
-  if (rows.length < 2) {
-    throw new Error("Tệp CSV cần có ít nhất một dòng dữ liệu.");
-  }
-
-  const headerRow = rows[0]?.map((cell) => normalizeCsvHeader(String(cell ?? ""))) ?? [];
+  const headerRow = rows[0]?.map((cell) => normalizeSpreadsheetHeader(String(cell ?? ""))) ?? [];
   const fullNameIndex = headerRow.findIndex((value) => fullNameHeaderAliases.has(value));
   const emailIndex = headerRow.findIndex((value) => emailHeaderAliases.has(value));
   const studentCodeIndex = headerRow.findIndex((value) => studentCodeHeaderAliases.has(value));

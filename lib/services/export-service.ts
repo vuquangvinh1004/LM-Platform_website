@@ -1,9 +1,9 @@
-import { utils, write } from "xlsx";
 import { z } from "zod";
 
 import { getAssessmentResults } from "@/lib/services/submission-service";
 import type { ServiceResult } from "@/lib/types/service-result";
 import type { SubmissionSummary } from "@/lib/types/submission";
+import { createCsvBuffer, createWorkbookBuffer } from "@/lib/spreadsheets/spreadsheet-utils";
 
 const exportAssessmentResultsSchema = z.object({
   assessmentId: z.string().uuid(),
@@ -28,48 +28,29 @@ export type ExportAssessmentResultsTemplateOutput = {
 };
 
 function toCsv(rows: SubmissionSummary[]): Buffer {
-  const header = [
-    "Mã sinh viên",
-    "Họ tên sinh viên",
-    "Email",
-    "Điểm",
-    "Nộp lúc",
-    "Nguồn",
-    "Ghi chú",
-  ];
-
-  const escaped = (value: unknown) => {
-    if (value === undefined || value === null) {
-      return "";
-    }
-
-    const stringValue = String(value);
-    if (stringValue.includes(",") || stringValue.includes("\n") || stringValue.includes("\"")) {
-      return `"${stringValue.replace(/\"/g, "\"\"")}"`;
-    }
-
-    return stringValue;
-  };
-
-  const lines = [header.join(",")];
-
-  for (const row of rows) {
-    lines.push([
-      escaped(row.studentCode),
-      escaped(row.studentFullName),
-      escaped(row.studentEmail),
-      escaped(row.rawScore),
-      escaped(row.submittedAt),
-      escaped(row.sourceLabel ?? row.source),
-      escaped(row.note),
-    ].join(","));
-  }
-
-  return Buffer.concat([Buffer.from("\uFEFF", "utf8"), Buffer.from(lines.join("\n"), "utf8")]);
+  return createCsvBuffer({
+    headers: [
+      "Mã sinh viên",
+      "Họ tên sinh viên",
+      "Email",
+      "Điểm",
+      "Nộp lúc",
+      "Nguồn",
+      "Ghi chú",
+    ],
+    rows: rows.map((row) => [
+      row.studentCode,
+      row.studentFullName,
+      row.studentEmail,
+      row.rawScore,
+      row.submittedAt,
+      row.sourceLabel ?? row.source,
+      row.note,
+    ]),
+  });
 }
 
 function toXlsx(rows: SubmissionSummary[]): Buffer {
-  const workbook = utils.book_new();
   const scores = rows
     .map((row) => row.rawScore)
     .filter((score): score is number => typeof score === "number")
@@ -119,11 +100,10 @@ function toXlsx(rows: SubmissionSummary[]): Buffer {
     { "Chỉ số": "Độ lệch chuẩn điểm (Standard Deviation)", "Giá trị": standardDeviation },
   ];
 
-  const summarySheet = utils.json_to_sheet(summaryRows);
-  utils.book_append_sheet(workbook, summarySheet, "thong_ke_ket_qua");
-
-  const output = write(workbook, { type: "buffer", bookType: "xlsx" });
-  return Buffer.isBuffer(output) ? output : Buffer.from(output);
+  return createWorkbookBuffer({
+    sheetName: "thong_ke_ket_qua",
+    rows: summaryRows,
+  });
 }
 
 function buildImportTemplateRows() {
@@ -141,36 +121,26 @@ function buildImportTemplateRows() {
 }
 
 function toTemplateCsv(): Buffer {
-  const header = ["Mã sinh viên", "Họ tên sinh viên", "Email", "Điểm", "Nộp lúc", "Nguồn", "Ghi chú"];
   const rows = buildImportTemplateRows();
-  const escaped = (value: unknown) => {
-    if (value === undefined || value === null) {
-      return "";
-    }
-
-    const stringValue = String(value);
-    if (stringValue.includes(",") || stringValue.includes("\n") || stringValue.includes("\"")) {
-      return `"${stringValue.replace(/\"/g, "\"\"")}"`;
-    }
-
-    return stringValue;
-  };
-
-  const lines = [header.join(",")];
-
-  for (const row of rows) {
-    lines.push(header.map((column) => escaped(row[column as keyof typeof row])).join(","));
-  }
-
-  return Buffer.concat([Buffer.from("\uFEFF", "utf8"), Buffer.from(lines.join("\n"), "utf8")]);
+  return createCsvBuffer({
+    headers: ["Mã sinh viên", "Họ tên sinh viên", "Email", "Điểm", "Nộp lúc", "Nguồn", "Ghi chú"],
+    rows: rows.map((row) => [
+      row["Mã sinh viên"],
+      row["Họ tên sinh viên"],
+      row.Email,
+      row["Điểm"],
+      row["Nộp lúc"],
+      row["Nguồn"],
+      row["Ghi chú"],
+    ]),
+  });
 }
 
 function toTemplateXlsx(): Buffer {
-  const workbook = utils.book_new();
-  const worksheet = utils.json_to_sheet(buildImportTemplateRows());
-  utils.book_append_sheet(workbook, worksheet, "template");
-  const output = write(workbook, { type: "buffer", bookType: "xlsx" });
-  return Buffer.isBuffer(output) ? output : Buffer.from(output);
+  return createWorkbookBuffer({
+    sheetName: "template",
+    rows: buildImportTemplateRows(),
+  });
 }
 
 export function exportAssessmentResultsImportTemplate(format: "csv" | "xlsx"): ExportAssessmentResultsTemplateOutput {
