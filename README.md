@@ -110,6 +110,7 @@ The design and implementation notes live in the docs folder. Start with:
 4. `SPEC_FINAL.md`
 5. `DATABASE_SCHEMA.md`
 6. `SERVICE_CONTRACT.md`
+7. `GLOSSARY.md`
 
 ## Community Files
 

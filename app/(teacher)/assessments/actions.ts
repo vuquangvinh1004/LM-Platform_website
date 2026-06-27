@@ -3,8 +3,12 @@
 import type { AssessmentActionState } from "@/app/(teacher)/assessments/assessment-action-state";
 import { revalidatePaths } from "@/lib/navigation/route-invalidation";
 import { requireRole } from "@/lib/services/auth-service";
-import { createAssessment, deleteAssessment, updateAssessmentStatus } from "@/lib/services/assessment-service";
-import { attachQuestionBankItemsToAssessment, createQuestionBankItem } from "@/lib/services/question-bank-service";
+import {
+  createAssessmentCommand,
+  createQuestionBankItemCommand,
+  deleteAssessmentCommand,
+  updateAssessmentStatusCommand,
+} from "@/lib/commands/assessment-commands";
 
 function parseLocalDatetimeToIso(value: FormDataEntryValue | null): string | undefined {
   const rawValue = String(value ?? "").trim();
@@ -154,7 +158,7 @@ export async function createAssessmentAction(
   const [classId = "", courseId = ""] = classCoursePair.split("::");
   const questionIds = formData.getAll("questionId").map((value) => String(value).trim()).filter(Boolean);
 
-  const result = await createAssessment({
+  const result = await createAssessmentCommand({
     classId,
     courseId,
     actorId: profileResult.data.id,
@@ -173,27 +177,14 @@ export async function createAssessmentAction(
     openAt: parseLocalDatetimeToIso(formData.get("openAt")),
     dueAt: parseLocalDatetimeToIso(formData.get("dueAt")),
     status: (formData.get("status") as "draft" | "open" | "closed" | "archived" | null) ?? "draft",
+    questionIds,
   });
 
   if (!result.ok) {
     return {
       status: "error",
-      message: result.error.message,
+      message: result.message,
     };
-  }
-
-  if (questionIds.length > 0) {
-    const attachResult = await attachQuestionBankItemsToAssessment({
-      assessmentId: result.data.id,
-      questionIds,
-    });
-
-    if (!attachResult.ok) {
-      return {
-        status: "error",
-        message: `Đã tạo bài kiểm tra nhưng chưa gắn được câu hỏi: ${attachResult.error.message}`,
-      };
-    }
   }
 
   revalidatePaths(["/assessments", "/my-classes/assessments", "/my-classes"]);
@@ -226,7 +217,7 @@ export async function createQuestionBankItemAction(
     };
   }
 
-  const result = await createQuestionBankItem({
+  const result = await createQuestionBankItemCommand({
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
     courseId: String(formData.get("courseId") ?? "").trim(),
@@ -242,7 +233,7 @@ export async function createQuestionBankItemAction(
   if (!result.ok) {
     return {
       status: "error",
-      message: result.error.message,
+      message: result.message,
     };
   }
 
@@ -267,7 +258,7 @@ export async function updateAssessmentStatusAction(
     };
   }
 
-  const result = await updateAssessmentStatus({
+  const result = await updateAssessmentStatusCommand({
     assessmentId: String(formData.get("assessmentId") ?? "").trim(),
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
@@ -277,7 +268,7 @@ export async function updateAssessmentStatusAction(
   if (!result.ok) {
     return {
       status: "error",
-      message: result.error.message,
+      message: result.message,
     };
   }
 
@@ -302,7 +293,7 @@ export async function deleteAssessmentAction(
     };
   }
 
-  const result = await deleteAssessment({
+  const result = await deleteAssessmentCommand({
     assessmentId: String(formData.get("assessmentId") ?? "").trim(),
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
@@ -311,7 +302,7 @@ export async function deleteAssessmentAction(
   if (!result.ok) {
     return {
       status: "error",
-      message: result.error.message,
+      message: result.message,
     };
   }
 

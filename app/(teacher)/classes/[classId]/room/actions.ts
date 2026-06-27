@@ -5,13 +5,13 @@ import { redirect } from "next/navigation";
 import { getClassroomRoomPaths, revalidatePaths } from "@/lib/navigation/route-invalidation";
 import { requireRole } from "@/lib/services/auth-service";
 import {
-  applyClassTemplate,
-  createClassAnnouncement,
-  createClassSession,
-  syncClassTemplateSnapshot,
-  updateTeacherDeskNote,
-} from "@/lib/services/classroom-service";
-import { markClassDirectMessagesAsRead, sendClassDirectMessage } from "@/lib/services/message-service";
+  applyClassTemplateCommand,
+  createClassAnnouncementCommand,
+  createClassSessionCommand,
+  markClassDirectMessagesAsReadCommand,
+  sendClassDirectMessageCommand,
+  updateTeacherDeskNoteCommand,
+} from "@/lib/commands/classroom-commands";
 import type { ClassroomMessageMutationResult } from "@/lib/types/message";
 
 function buildFlashPath(
@@ -38,7 +38,9 @@ export async function applyClassTemplateAction(classId: string, formData: FormDa
     redirect(buildFlashPath(classId, "template", "error", profileResult.error.message));
   }
 
-  const result = await applyClassTemplate({
+  // Template application is a special flow because it mutates both the active class room
+  // and the template-derived snapshot that other views reuse.
+  const result = await applyClassTemplateCommand({
     classId,
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
@@ -63,7 +65,7 @@ export async function createClassAnnouncementAction(classId: string, formData: F
     redirect(buildFlashPath(classId, "announcement", "error", profileResult.error.message));
   }
 
-  const result = await createClassAnnouncement({
+  const result = await createClassAnnouncementCommand({
     classId,
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
@@ -86,7 +88,9 @@ export async function createClassSessionAction(classId: string, formData: FormDa
     redirect(buildFlashPath(classId, "announcement", "error", profileResult.error.message));
   }
 
-  const result = await createClassSession({
+  // Creating a session is another snapshot-bearing mutation, so the template snapshot
+  // is refreshed as part of the command before we invalidate the room view.
+  const result = await createClassSessionCommand({
     classId,
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
@@ -97,7 +101,6 @@ export async function createClassSessionAction(classId: string, formData: FormDa
     redirect(buildFlashPath(classId, "announcement", "error", result.error.message));
   }
 
-  await syncClassTemplateSnapshot(classId);
   revalidatePaths(getClassroomRoomPaths(classId));
   redirect(`/classes/${classId}/sessions/${result.data.id}`);
 }
@@ -115,7 +118,7 @@ export async function sendClassDirectMessageAction(classId: string, formData: Fo
     };
   }
 
-  const result = await sendClassDirectMessage({
+  const result = await sendClassDirectMessageCommand({
     classId,
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
@@ -150,24 +153,18 @@ export async function markClassDirectMessagesAsReadAction(classId: string): Prom
     };
   }
 
-  const result = await markClassDirectMessagesAsRead({
+  const result = await markClassDirectMessagesAsReadCommand({
     classId,
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
   });
 
   if (!result.ok) {
-    return {
-      ok: false,
-      message: result.error.message,
-    };
+    return result;
   }
 
   revalidatePaths(getClassroomRoomPaths(classId));
-  return {
-    ok: true,
-    message: "Đã cập nhật trạng thái đọc của tin nhắn.",
-  };
+  return result;
 }
 
 export async function markStudentMessagesAsReadAction(classId: string, studentId: string): Promise<ClassroomMessageMutationResult> {
@@ -180,7 +177,7 @@ export async function markStudentMessagesAsReadAction(classId: string, studentId
     };
   }
 
-  const result = await markClassDirectMessagesAsRead({
+  const result = await markClassDirectMessagesAsReadCommand({
     classId,
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
@@ -188,17 +185,11 @@ export async function markStudentMessagesAsReadAction(classId: string, studentId
   });
 
   if (!result.ok) {
-    return {
-      ok: false,
-      message: result.error.message,
-    };
+    return result;
   }
 
   revalidatePaths(getClassroomRoomPaths(classId));
-  return {
-    ok: true,
-    message: "Đã cập nhật trạng thái đọc của tin nhắn.",
-  };
+  return result;
 }
 
 export async function updateTeacherDeskNoteAction(classId: string, formData: FormData): Promise<ClassroomMessageMutationResult> {
@@ -211,7 +202,7 @@ export async function updateTeacherDeskNoteAction(classId: string, formData: For
     };
   }
 
-  const result = await updateTeacherDeskNote({
+  const result = await updateTeacherDeskNoteCommand({
     classId,
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
@@ -219,16 +210,9 @@ export async function updateTeacherDeskNoteAction(classId: string, formData: For
   });
 
   if (!result.ok) {
-    return {
-      ok: false,
-      message: result.error.message,
-    };
+    return result;
   }
 
-  await syncClassTemplateSnapshot(classId);
   revalidatePaths(getClassroomRoomPaths(classId));
-  return {
-    ok: true,
-    message: "Đã lưu ghi chú thông tin.",
-  };
+  return result;
 }

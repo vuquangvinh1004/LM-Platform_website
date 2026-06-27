@@ -63,6 +63,8 @@ Course/Học phần
 
 Giao diện người dùng sử dụng tiếng Việt. Tên biến/code dùng tiếng Anh để nhất quán với hệ sinh thái phát triển.
 
+Các thuật ngữ chuẩn trong UI và docs được khóa tại `GLOSSARY.md` để tránh lệch tên giữa các màn hình và service.
+
 ### 5.2. Layout tổng quát
 
 ```text

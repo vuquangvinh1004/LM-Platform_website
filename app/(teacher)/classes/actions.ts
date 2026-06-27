@@ -157,7 +157,6 @@ export async function reviewClassEnrollmentRequestAction(
   }
 
   revalidatePaths(getClassListPaths());
-  revalidatePaths(getClassListPaths());
 
   return {
     status: "success",
@@ -218,6 +217,8 @@ export async function addStudentToClassAction(
 
 /**
  * Imports students from a CSV file for a manageable class.
+ * This flow keeps CSV parsing in the service layer so the action stays focused on auth,
+ * form decoding, and scope-based invalidation only.
  */
 export async function importStudentsCsvToClassAction(
   _prevState: ClassActionState,
