@@ -1,17 +1,18 @@
 "use server";
 
 import type { ClassActionState } from "@/app/(teacher)/classes/class-action-state";
+import {
+  addStudentsToClassCommand,
+  createClassCommand,
+  createClassLifecycleRequestCommand,
+  createTemplateClassCommand,
+  deleteClassTemplateCommand,
+  importStudentsToClassCommand,
+  reviewClassChangeRequestCommand,
+  reviewEnrollmentRequestCommand,
+} from "@/lib/commands/class-commands";
 import { getClassListPaths, getDashboardPaths, revalidatePaths } from "@/lib/navigation/route-invalidation";
 import { requireRole } from "@/lib/services/auth-service";
-import {
-  addStudentsToClass,
-  createClass,
-  createClassLifecycleRequest,
-  importStudentsToClass,
-  reviewClassChangeRequest,
-} from "@/lib/services/class-service";
-import { createTemplateClass, deleteClassTemplate } from "@/lib/services/classroom-service";
-import { reviewEnrollmentRequest } from "@/lib/services/enrollment-service";
 
 /**
  * Creates a class for the current teacher/admin profile.
@@ -29,7 +30,7 @@ export async function createClassAction(
     };
   }
 
-  const createResult = await createClass({
+  const createResult = await createClassCommand({
     courseId: String(formData.get("courseId") ?? "").trim(),
     teacherId: profileResult.data.id,
     teacherRole: profileResult.data.role,
@@ -68,7 +69,7 @@ export async function createClassLifecycleRequestAction(
     };
   }
 
-  const requestResult = await createClassLifecycleRequest({
+  const requestResult = await createClassLifecycleRequestCommand({
     classId: String(formData.get("classId") ?? "").trim(),
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
@@ -104,7 +105,7 @@ export async function reviewClassChangeRequestAction(
     };
   }
 
-  const reviewResult = await reviewClassChangeRequest({
+  const reviewResult = await reviewClassChangeRequestCommand({
     requestId: String(formData.get("requestId") ?? "").trim(),
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
@@ -141,7 +142,7 @@ export async function reviewClassEnrollmentRequestAction(
     };
   }
 
-  const reviewResult = await reviewEnrollmentRequest({
+  const reviewResult = await reviewEnrollmentRequestCommand({
     requestId: String(formData.get("requestId") ?? "").trim(),
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
@@ -180,7 +181,7 @@ export async function addStudentToClassAction(
     };
   }
 
-  const addResult = await addStudentsToClass({
+  const addResult = await addStudentsToClassCommand({
     classId: String(formData.get("classId") ?? "").trim(),
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
@@ -242,7 +243,7 @@ export async function importStudentsCsvToClassAction(
     };
   }
 
-  const importResult = await importStudentsToClass({
+  const importResult = await importStudentsToClassCommand({
     classId: String(formData.get("classId") ?? "").trim(),
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
@@ -286,7 +287,7 @@ export async function deleteClassTemplateAction(
     };
   }
 
-  const deleteResult = await deleteClassTemplate({
+  const deleteResult = await deleteClassTemplateCommand({
     templateId,
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
@@ -331,7 +332,7 @@ export async function createTemplateClassAction(
     };
   }
 
-  const createResult = await createTemplateClass({
+  const createResult = await createTemplateClassCommand({
     courseId,
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,

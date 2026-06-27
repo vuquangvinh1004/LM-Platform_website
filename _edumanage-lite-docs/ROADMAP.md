@@ -19,6 +19,7 @@ Quy ước UI chung:
 - Không dùng button viền hoặc card-like button cho hành động quay lại; button viền chỉ dành cho lệnh/hành động rõ ràng như lọc, export, mở form hoặc thao tác dữ liệu.
 - Đặt link quay lại ở góc trái trên cùng của trang, trước tiêu đề hoặc cụm header chính, để vị trí điều hướng luôn nhất quán.
 - Khi triển khai UI mới, dùng component `BackTextLink` để giữ thống nhất kiểu chữ, màu, hover state và spacing.
+- Tên gọi chuẩn cho UI, docs và comment bám theo `GLOSSARY.md`; nếu đổi thuật ngữ thì cập nhật glossary trước rồi mới sửa các file khác.
 
 Ma trận quyền chức năng chính đã chốt:
 

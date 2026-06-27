@@ -3,6 +3,7 @@ import {
   checkScopedPermissionRepository,
   renewStudentAccessRepository,
 } from "@/lib/repositories/access-control-repository";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { ScopedPermissionCheckResult } from "@/lib/types/access-control";
 import type { ServiceResult } from "@/lib/types/service-result";
 import {
@@ -136,6 +137,136 @@ export async function renewStudentAccess(
       error: {
         code: "UNKNOWN_ERROR",
         message: "Không thể gia hạn truy cập sinh viên.",
+        details: error instanceof Error ? error.message : String(error),
+      },
+    };
+  }
+}
+
+export async function grantScopedPermission(input: {
+  actorId: string;
+  actorRole: "admin";
+  targetActorId: string;
+  scopeType: string;
+  scopeId?: string;
+  permissions: {
+    manage_course: boolean;
+    manage_class: boolean;
+    manage_members: boolean;
+  };
+}): Promise<ServiceResult<{ granted: true }>> {
+  if (input.actorRole !== "admin") {
+    return {
+      ok: false,
+      error: {
+        code: "FORBIDDEN",
+        message: "Chỉ Admin được cấp scope.",
+      },
+    };
+  }
+
+  if (!input.targetActorId.trim() || !input.scopeType.trim()) {
+    return {
+      ok: false,
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "Thiếu dữ liệu cấp phạm vi quyền.",
+      },
+    };
+  }
+
+  try {
+    const supabase = await createServerSupabaseClient();
+    const { error } = await supabase.from("permission_scopes").insert({
+      actor_id: input.targetActorId.trim(),
+      scope_type: input.scopeType.trim(),
+      scope_id: input.scopeType.trim() === "system" ? null : input.scopeId?.trim() || null,
+      permissions: input.permissions,
+      status: "active",
+      granted_by: input.actorId,
+    });
+
+    if (error) {
+      return {
+        ok: false,
+        error: {
+          code: "UNKNOWN_ERROR",
+          message: "Không thể cấp scope.",
+          details: error.message,
+        },
+      };
+    }
+
+    return {
+      ok: true,
+      data: { granted: true },
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: {
+        code: "UNKNOWN_ERROR",
+        message: "Không thể cấp scope.",
+        details: error instanceof Error ? error.message : String(error),
+      },
+    };
+  }
+}
+
+export async function revokeScopedPermission(input: {
+  actorId: string;
+  actorRole: "admin";
+  scopeId: string;
+}): Promise<ServiceResult<{ revoked: true }>> {
+  if (input.actorRole !== "admin") {
+    return {
+      ok: false,
+      error: {
+        code: "FORBIDDEN",
+        message: "Chỉ Admin được thu hồi scope.",
+      },
+    };
+  }
+
+  if (!input.scopeId.trim()) {
+    return {
+      ok: false,
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "Thiếu mã scope cần thu hồi.",
+      },
+    };
+  }
+
+  try {
+    const supabase = await createServerSupabaseClient();
+    const { error } = await supabase
+      .from("permission_scopes")
+      .update({ status: "revoked" })
+      .eq("id", input.scopeId.trim())
+      .eq("status", "active");
+
+    if (error) {
+      return {
+        ok: false,
+        error: {
+          code: "UNKNOWN_ERROR",
+          message: "Không thể thu hồi scope.",
+          details: error.message,
+        },
+      };
+    }
+
+    return {
+      ok: true,
+      data: { revoked: true },
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: {
+        code: "UNKNOWN_ERROR",
+        message: "Không thể thu hồi scope.",
         details: error instanceof Error ? error.message : String(error),
       },
     };

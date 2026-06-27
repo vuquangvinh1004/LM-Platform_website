@@ -3,10 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { reviewEnrollmentRequestsBatch } from "@/lib/services/enrollment-service";
-import { approveStudentAccess, renewStudentAccess } from "@/lib/services/access-control-service";
+import {
+  approveStudentAccessCommand,
+  grantScopeCommand,
+  renewStudentAccessCommand,
+  revokeScopeCommand,
+  reviewEnrollmentBatchCommand,
+} from "@/lib/commands/access-review-commands";
 import { requireRole } from "@/lib/services/auth-service";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 function redirectWithFlash(status: "success" | "error", message: string): never {
   redirect(`/access-review?status=${status}&message=${encodeURIComponent(message)}`);
@@ -22,7 +26,7 @@ export async function approveStudentAccessFromReviewAction(formData: FormData): 
   const studentId = String(formData.get("studentId") ?? "").trim();
   const expiresAt = String(formData.get("expiresAt") ?? "").trim() || undefined;
 
-  const result = await approveStudentAccess({
+  const result = await approveStudentAccessCommand({
     studentId,
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
@@ -47,7 +51,7 @@ export async function renewStudentAccessFromReviewAction(formData: FormData): Pr
   const studentId = String(formData.get("studentId") ?? "").trim();
   const expiresAt = String(formData.get("expiresAt") ?? "").trim();
 
-  const result = await renewStudentAccess({
+  const result = await renewStudentAccessCommand({
     studentId,
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
@@ -78,7 +82,7 @@ export async function reviewEnrollmentBatchAction(formData: FormData): Promise<v
     redirectWithFlash("error", "Vui lòng chọn ít nhất một yêu cầu để duyệt.");
   }
 
-  const result = await reviewEnrollmentRequestsBatch({
+  const result = await reviewEnrollmentBatchCommand({
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
     decision,
@@ -115,19 +119,17 @@ export async function grantScopeAction(formData: FormData): Promise<void> {
     manage_members: formData.get("manageMembers") === "on",
   };
 
-  const supabase = await createServerSupabaseClient();
-
-  const { error } = await supabase.from("permission_scopes").insert({
-    actor_id: actorId,
-    scope_type: scopeType,
-    scope_id: scopeType === "system" ? null : scopeId,
+  const result = await grantScopeCommand({
+    actorId: profileResult.data.id,
+    actorRole: profileResult.data.role,
+    targetActorId: actorId,
+    scopeType,
+    scopeId,
     permissions,
-    status: "active",
-    granted_by: profileResult.data.id,
   });
 
-  if (error) {
-    redirectWithFlash("error", "Không thể cấp scope: " + error.message);
+  if (!result.ok) {
+    redirectWithFlash("error", result.error.message);
   }
 
   revalidatePath("/access-review");
@@ -143,15 +145,14 @@ export async function revokeScopeAction(formData: FormData): Promise<void> {
 
   const scopeId = String(formData.get("scopeId") ?? "").trim();
 
-  const supabase = await createServerSupabaseClient();
-  const { error } = await supabase
-    .from("permission_scopes")
-    .update({ status: "revoked" })
-    .eq("id", scopeId)
-    .eq("status", "active");
+  const result = await revokeScopeCommand({
+    actorId: profileResult.data.id,
+    actorRole: profileResult.data.role,
+    scopeId,
+  });
 
-  if (error) {
-    redirectWithFlash("error", "Không thể thu hồi scope: " + error.message);
+  if (!result.ok) {
+    redirectWithFlash("error", result.error.message);
   }
 
   revalidatePath("/access-review");

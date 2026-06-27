@@ -3,38 +3,22 @@
 import { revalidatePath } from "next/cache";
 
 import type { LibraryActionState } from "@/app/(teacher)/library/library-action-state";
-import { requireRole } from "@/lib/services/auth-service";
 import {
-  applyAdminLibraryResourceAction,
-  archiveLibraryCategory,
-  createLibraryArchiveRequest,
-  createSimulationUploadIntent,
-  deletePersonalLibraryResource,
-  linkSimulationUploadToCourse,
-  parseLibraryTags,
-  registerSimulationUpload,
-  reviewMaterial,
-  requestNativeSimulationIntegration,
-  reviewLibraryArchiveRequest,
-  reviewNativeSimulationIntegration,
-  reviewSimulationUpload,
-  upsertLibraryCategory,
-} from "@/lib/services/library-service";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
-
-function resolveCourseIdForLibraryUpload(rawCourseId: FormDataEntryValue | null, actorRole: string): string | undefined {
-  const courseId = String(rawCourseId ?? "").trim();
-
-  if (courseId === "__other") {
-    return undefined;
-  }
-
-  if (actorRole !== "teacher" && !courseId) {
-    throw new Error("Mod/Admin cần chọn học phần hoặc Khác khi tải tài nguyên lên Thư viện.");
-  }
-
-  return courseId || undefined;
-}
+  applyAdminLibraryResourceActionCommand,
+  archiveLibraryCategoryCommand,
+  createLibraryArchiveRequestCommand,
+  deletePersonalLibraryResourceCommand,
+  linkSimulationUploadToCourseCommand,
+  resolveLibraryCourseId,
+  uploadSimulationPackageCommand,
+  requestNativeSimulationIntegrationCommand,
+  reviewLibraryArchiveRequestCommand,
+  reviewMaterialCommand,
+  reviewNativeSimulationIntegrationCommand,
+  reviewSimulationUploadCommand,
+  upsertLibraryCategoryCommand,
+} from "@/lib/commands/library-commands";
+import { requireRole } from "@/lib/services/auth-service";
 
 export async function uploadSimulationPackageAction(
   _prevState: LibraryActionState,
@@ -55,7 +39,7 @@ export async function uploadSimulationPackageAction(
   let courseId: string | undefined;
 
   try {
-    courseId = resolveCourseIdForLibraryUpload(formData.get("courseId"), profileResult.data.role);
+    courseId = resolveLibraryCourseId(formData.get("courseId"), profileResult.data.role);
   } catch (error) {
     return {
       status: "error",
@@ -63,66 +47,24 @@ export async function uploadSimulationPackageAction(
     };
   }
 
-  const uploadIntentResult = await createSimulationUploadIntent({
+  const result = await uploadSimulationPackageCommand({
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
-    fileName: fileEntry.name,
-    fileType: fileEntry.type,
-    fileSize: fileEntry.size,
-  });
-
-  if (!uploadIntentResult.ok) {
-    return { status: "error", message: uploadIntentResult.error.message };
-  }
-
-  const supabase = await createServerSupabaseClient();
-  const { storageBucket, storagePath, fileName, fileType, fileSize } = uploadIntentResult.data;
-  const { error: uploadError } = await supabase.storage.from(storageBucket).upload(storagePath, fileEntry, {
-    contentType: fileType,
-    upsert: false,
-  });
-
-  if (uploadError) {
-    return {
-      status: "error",
-      message:
-        uploadError.message.includes("Bucket not found") || uploadError.message.includes("not found")
-          ? "Chưa có bucket simulation-packages. Hãy áp dụng migration Supabase mới trước khi tải mô phỏng."
-          : "Không thể tải tệp mô phỏng lên kho lưu trữ.",
-    };
-  }
-
-  const registerResult = await registerSimulationUpload({
-    actorId: profileResult.data.id,
-    actorRole: profileResult.data.role,
-    fileName,
-    fileType,
-    fileSize,
+    fileEntry,
     courseId,
     categoryId: String(formData.get("categoryId") ?? "").trim() || undefined,
     title: String(formData.get("title") ?? "").trim(),
     description: String(formData.get("description") ?? "").trim() || undefined,
-    tags: parseLibraryTags(String(formData.get("tags") ?? "")),
-    storageBucket,
-    storagePath,
+    tagsText: String(formData.get("tags") ?? ""),
   });
 
-  if (!registerResult.ok) {
-    await supabase.storage.from(storageBucket).remove([storagePath]);
-    return { status: "error", message: registerResult.error.message };
+  if (!result.ok) {
+    return { status: "error", message: result.message };
   }
 
   revalidatePath("/library");
 
-  return {
-    status: "success",
-    message:
-      registerResult.data.reviewStatus === "pending_review"
-        ? `Mô phỏng ${registerResult.data.title} đã được tải lên và đang chờ Mod/Admin duyệt vào Thư viện dùng chung.`
-        : profileResult.data.role === "teacher"
-          ? `Mô phỏng ${registerResult.data.title} đã được tải lên Thư viện cá nhân.`
-          : `Mô phỏng ${registerResult.data.title} đã được tải thẳng vào Thư viện.`,
-  };
+  return { status: "success", message: result.message };
 }
 
 export async function reviewMaterialAction(
@@ -141,7 +83,7 @@ export async function reviewMaterialAction(
     return { status: "error", message: "Trạng thái duyệt tài liệu không hợp lệ." };
   }
 
-  const result = await reviewMaterial({
+  const result = await reviewMaterialCommand({
     materialId: String(formData.get("materialId") ?? ""),
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
@@ -175,7 +117,7 @@ export async function upsertLibraryCategoryAction(
   }
 
   const sortOrderValue = Number(String(formData.get("sortOrder") ?? "0"));
-  const result = await upsertLibraryCategory({
+  const result = await upsertLibraryCategoryCommand({
     categoryId: String(formData.get("categoryId") ?? "").trim() || undefined,
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
@@ -207,7 +149,7 @@ export async function archiveLibraryCategoryAction(
     return { status: "error", message: profileResult.error.message };
   }
 
-  const result = await archiveLibraryCategory({
+  const result = await archiveLibraryCategoryCommand({
     categoryId: String(formData.get("categoryId") ?? ""),
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
@@ -242,7 +184,7 @@ export async function reviewSimulationUploadAction(
     return { status: "error", message: "Trạng thái duyệt không hợp lệ." };
   }
 
-  const result = await reviewSimulationUpload({
+  const result = await reviewSimulationUploadCommand({
     uploadId: String(formData.get("uploadId") ?? ""),
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
@@ -272,7 +214,7 @@ export async function linkSimulationUploadToCourseAction(
     return { status: "error", message: profileResult.error.message };
   }
 
-  const result = await linkSimulationUploadToCourse({
+  const result = await linkSimulationUploadToCourseCommand({
     uploadId: String(formData.get("uploadId") ?? ""),
     courseId: String(formData.get("courseId") ?? ""),
     actorId: profileResult.data.id,
@@ -302,7 +244,7 @@ export async function requestNativeSimulationIntegrationAction(
     return { status: "error", message: profileResult.error.message };
   }
 
-  const result = await requestNativeSimulationIntegration({
+  const result = await requestNativeSimulationIntegrationCommand({
     uploadId: String(formData.get("uploadId") ?? ""),
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
@@ -330,7 +272,7 @@ export async function acceptNativeSimulationIntegrationAction(
     return { status: "error", message: profileResult.error.message };
   }
 
-  const result = await reviewNativeSimulationIntegration({
+  const result = await reviewNativeSimulationIntegrationCommand({
     uploadId: String(formData.get("uploadId") ?? ""),
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
@@ -366,7 +308,7 @@ export async function reviewNativeSimulationIntegrationAction(
     return { status: "error", message: "Trạng thái duyệt native không hợp lệ." };
   }
 
-  const result = await reviewNativeSimulationIntegration({
+  const result = await reviewNativeSimulationIntegrationCommand({
     uploadId: String(formData.get("uploadId") ?? ""),
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
@@ -406,7 +348,7 @@ export async function applyAdminLibraryResourceActionForm(
     return { status: "error", message: "Loại tài nguyên không hợp lệ." };
   }
 
-  const result = await applyAdminLibraryResourceAction({
+  const result = await applyAdminLibraryResourceActionCommand({
     targetType,
     targetId: String(formData.get("targetId") ?? ""),
     action,
@@ -441,7 +383,7 @@ export async function createLibraryArchiveRequestAction(
     return { status: "error", message: "Loại tài nguyên cần ẩn không hợp lệ." };
   }
 
-  const result = await createLibraryArchiveRequest({
+  const result = await createLibraryArchiveRequestCommand({
     targetType,
     targetId: String(formData.get("targetId") ?? ""),
     action: String(formData.get("action") ?? "") === "delete" ? "delete" : "archive",
@@ -478,7 +420,7 @@ export async function deletePersonalLibraryResourceAction(
     return { status: "error", message: "Loại tài nguyên cá nhân không hợp lệ." };
   }
 
-  const result = await deletePersonalLibraryResource({
+  const result = await deletePersonalLibraryResourceCommand({
     targetType,
     targetId: String(formData.get("targetId") ?? ""),
     actorId: profileResult.data.id,
@@ -513,7 +455,7 @@ export async function reviewLibraryArchiveRequestAction(
     return { status: "error", message: "Trạng thái duyệt không hợp lệ." };
   }
 
-  const result = await reviewLibraryArchiveRequest({
+  const result = await reviewLibraryArchiveRequestCommand({
     requestId: String(formData.get("requestId") ?? ""),
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
