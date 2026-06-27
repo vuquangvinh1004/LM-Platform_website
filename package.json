@@ -1,0 +1,74 @@
+{
+  "name": "learning-management-platform",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.7.0",
+  "description": "Learning Management Platform (LMP) - lightweight learning management hub for teachers",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:integration": "node scripts/testing/run-integration-tests.mjs",
+    "test:all": "pnpm test && pnpm test:integration",
+    "test:watch": "vitest",
+    "test:e2e": "pnpm supabase:start && playwright test",
+    "security:scan": "node scripts/security/check-no-secrets-in-tracked-files.mjs",
+    "ops:export:critical": "node scripts/ops/export-critical-data.mjs",
+    "local:start": "node scripts/ops/start-local-website.mjs",
+    "local:stop": "node scripts/ops/stop-local-website.mjs",
+    "fixture:phase4": "node scripts/testing/seed-phase4-fixture.mjs",
+    "supabase:start": "pnpm dlx supabase@latest start",
+    "supabase:stop": "pnpm dlx supabase@latest stop",
+    "supabase:status": "pnpm dlx supabase@latest status",
+    "supabase:db:reset": "pnpm dlx supabase@latest db reset",
+    "admin:bootstrap": "node scripts/admin/bootstrap-local-admin.mjs"
+  },
+  "keywords": [
+    "education",
+    "nextjs",
+    "supabase"
+  ],
+  "license": "UNLICENSED",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "11.7.0",
+      "onFail": "download"
+    }
+  },
+  "type": "module",
+  "dependencies": {
+    "@supabase/ssr": "^0.10.3",
+    "@supabase/supabase-js": "^2.106.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.16.0",
+    "next": "^16.2.6",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "recharts": "^3.8.1",
+    "tailwind-merge": "^3.6.0",
+    "xlsx": "^0.18.5",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@tailwindcss/postcss": "^4.3.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^25.9.1",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "autoprefixer": "^10.5.0",
+    "eslint": "^9.39.1",
+    "eslint-config-next": "^16.2.6",
+    "jsdom": "^29.1.1",
+    "postcss": "^8.5.15",
+    "tailwindcss": "^4.3.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
+  }
+}

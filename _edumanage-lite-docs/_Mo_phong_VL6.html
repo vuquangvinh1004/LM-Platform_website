@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="vi" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mô Phỏng Chuyển Động Đuổi Nhau - Vật Lý 6</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Font: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons for Beautiful UI -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom scrollbar for beautiful dark mode design */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col selection:bg-indigo-500 selection:text-white overflow-x-hidden">
+
+    <!-- Header / Navigation -->
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50 transition-all">
+        <div class="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="bg-indigo-600 p-2.5 rounded-xl shadow-lg shadow-indigo-500/20">
+                    <i class="fa-solid fa-car-side text-2xl text-white animate-pulse"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+                        Mô Phỏng Đuổi Nhau Vật Lý 6
+                    </h1>
+                    <p class="text-xs text-slate-400 flex items-center gap-1">
+                        <span class="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+                        Góc Học Tập Tương Tác • Giáo viên: Thầy/Cô Vật Lý
+                    </p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="px-3 py-1 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-full text-xs font-semibold">
+                    Lớp 6: Cơ Học & Chuyển Động
+                </span>
+                <button onclick="resetSimulation()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1">
+                    <i class="fa-solid fa-rotate-left"></i> Đặt Lại
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 py-6 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Left Side: Simulation Track, Controls and Graph (8 cols on large screens) -->
+        <div class="lg:col-span-8 flex flex-col space-y-6">
+            
+            <!-- Pedagogical Intro Block -->
+            <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 relative overflow-hidden shadow-xl">
+                <div class="absolute -right-10 -top-10 w-40 h-40 bg-indigo-600/10 rounded-full blur-3xl"></div>
+                <div class="relative z-10">
+                    <h2 class="text-base font-semibold text-indigo-400 flex items-center gap-2 mb-2">
+                        <i class="fa-solid fa-chalkboard-user"></i> Lời Giảng của Thầy/Cô:
+                    </h2>
+                    <p class="text-slate-300 text-sm leading-relaxed">
+                        Chào các em học sinh lớp 6 thân yêu! Trong bài học hôm nay, chúng ta sẽ cùng nhau quan sát chuyển động của hai chiếc xe cùng đi trên một con đường thẳng. 
+                        <strong>Xe 1 (xe màu xanh lục)</strong> xuất phát ở phía trước một khoảng cách là <span class="text-emerald-400 font-bold italic">n (mét)</span>. 
+                        <strong>Xe 2 (xe màu đỏ cam)</strong> xuất phát từ vạch xuất phát phía sau đuổi theo. Hãy thử thay đổi tốc độ của hai xe và khoảng cách ban đầu để xem khi nào Xe 2 có thể đuổi kịp Xe 1 nhé!
+                    </p>
+                </div>
+            </div>
+
+            <!-- 2D Simulation Canvas & Track Area -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl relative">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-bold text-slate-200 flex items-center gap-2">
+                        <i class="fa-solid fa-play-circle text-indigo-500"></i> Đường Chạy Thực Nghiệm (Mô phỏng 2D)
+                    </h3>
+                    <!-- Simulation Status Badges -->
+                    <div id="sim-status" class="px-3 py-1 bg-slate-800 text-slate-400 rounded-full text-xs font-medium border border-slate-700">
+                        Đang dừng
+                    </div>
+                </div>
+
+                <!-- Track Canvas Wrapper -->
+                <div class="relative bg-slate-950 rounded-xl border border-slate-800 overflow-hidden p-4 h-64 flex flex-col justify-between">
+                    
+                    <!-- Background Grid Road -->
+                    <div class="absolute inset-0 bg-grid-slate-800 opacity-20 pointer-events-none"></div>
+                    
+                    <!-- Top Info Banner in Canvas -->
+                    <div class="flex justify-between items-center text-xs text-slate-400 z-10 bg-slate-900/80 px-3 py-1.5 rounded-lg border border-slate-800">
+                        <div class="flex items-center gap-4">
+                            <span>Thời gian: <strong id="timer-val" class="text-indigo-400 font-bold text-sm">0.00s</strong></span>
+                            <span>Khoảng cách hiện tại: <strong id="distance-val" class="text-amber-400 font-bold text-sm">--</strong></span>
+                        </div>
+                        <span id="catch-verdict" class="text-indigo-300 font-medium">Chưa bắt đầu</span>
+                    </div>
+
+                    <!-- The Track Graphic (Pure CSS/SVG animated road) -->
+                    <div class="relative w-full h-32 flex flex-col justify-center my-auto">
+                        <!-- Upper Road Border -->
+                        <div class="w-full h-1 bg-slate-800"></div>
+                        
+                        <!-- Track Road Lane -->
+                        <div class="w-full h-20 bg-slate-900 flex flex-col justify-center relative overflow-hidden">
+                            <!-- Dashed lanes -->
+                            <div class="w-full h-0.5 border-t border-dashed border-slate-700"></div>
+                            
+                            <!-- Start Line Marker -->
+                            <div class="absolute left-10 top-0 bottom-0 w-1 bg-indigo-500/40 flex items-center justify-center">
+                                <span class="absolute -top-5 text-[9px] text-indigo-400 font-bold tracking-widest">MỐC 0m</span>
+                            </div>
+
+                            <!-- Car 2 (Red - Chaser) -->
+                            <div id="car2" class="absolute transition-transform duration-75 ease-linear" style="left: 40px; transform: translateY(-16px);">
+                                <div class="flex flex-col items-center">
+                                    <span class="text-[10px] text-red-400 font-bold mb-0.5 bg-red-950/80 px-1 border border-red-800 rounded">Xe 2 (v₂ = <span id="car2-speed-lbl">20</span> m/s)</span>
+                                    <!-- Custom SVG Red Car -->
+                                    <svg class="w-14 h-6 text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]" viewBox="0 0 100 40" fill="currentColor">
+                                        <path d="M10 25 L15 12 C17 8, 30 8, 35 8 L65 8 C72 8, 80 12, 85 20 L92 25 C97 27, 97 32, 92 32 L10 32 C5 32, 5 25, 10 25 Z" />
+                                        <rect x="25" y="11" width="15" height="8" fill="#1e293b" />
+                                        <rect x="48" y="11" width="15" height="8" fill="#1e293b" />
+                                        <!-- Wheels -->
+                                        <circle cx="28" cy="32" r="6" fill="#0f172a" stroke="#ef4444" stroke-width="2" />
+                                        <circle cx="72" cy="32" r="6" fill="#0f172a" stroke="#ef4444" stroke-width="2" />
+                                    </svg>
+                                </div>
+                            </div>
+
+                            <!-- Car 1 (Green - Leader) -->
+                            <div id="car1" class="absolute transition-transform duration-75 ease-linear" style="left: 200px; transform: translateY(12px);">
+                                <div class="flex flex-col items-center">
+                                    <!-- Custom SVG Green Car -->
+                                    <svg class="w-14 h-6 text-emerald-500 drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]" viewBox="0 0 100 40" fill="currentColor">
+                                        <path d="M10 25 L15 12 C17 8, 30 8, 35 8 L65 8 C72 8, 80 12, 85 20 L92 25 C97 27, 97 32, 92 32 L10 32 C5 32, 5 25, 10 25 Z" />
+                                        <rect x="25" y="11" width="15" height="8" fill="#1e293b" />
+                                        <rect x="48" y="11" width="15" height="8" fill="#1e293b" />
+                                        <!-- Wheels -->
+                                        <circle cx="28" cy="32" r="6" fill="#0f172a" stroke="#10b981" stroke-width="2" />
+                                        <circle cx="72" cy="32" r="6" fill="#0f172a" stroke="#10b981" stroke-width="2" />
+                                    </svg>
+                                    <span class="text-[10px] text-emerald-400 font-bold mt-0.5 bg-emerald-950/80 px-1 border border-emerald-800 rounded">Xe 1 (v₁ = <span id="car1-speed-lbl">10</span> m/s)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Lower Road Border -->
+                        <div class="w-full h-1 bg-slate-800"></div>
+                    </div>
+
+                    <!-- Bottom Ruler (Scale Bar) -->
+                    <div class="relative w-full h-6 border-t border-slate-800 flex justify-between px-10 text-[9px] text-slate-500 font-mono items-center">
+                        <span>0m (Xuất phát Xe 2)</span>
+                        <span>50m</span>
+                        <span>100m</span>
+                        <span>150m</span>
+                        <span>200m</span>
+                        <span>250m+ (Vô cực)</span>
+                    </div>
+                </div>
+
+                <!-- Simulation Speed Control and Buttons -->
+                <div class="flex flex-wrap items-center justify-between gap-4 mt-4 bg-slate-950 p-3 rounded-xl border border-slate-800/80">
+                    <div class="flex items-center gap-2">
+                        <button id="btn-play" onclick="togglePlay()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 px-5 rounded-lg text-sm transition-all flex items-center gap-2 shadow-lg shadow-indigo-600/10">
+                            <i id="play-icon" class="fa-solid fa-play"></i> <span id="play-text">Bắt đầu chạy</span>
+                        </button>
+                        <button onclick="stepSim()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-2 px-3 rounded-lg text-sm transition-all" title="Chạy từng bước nhỏ">
+                            <i class="fa-solid fa-forward-step"></i>
+                        </button>
+                        <button onclick="resetSimulation()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-2 px-4 rounded-lg text-sm transition-all">
+                            Đặt lại từ đầu
+                        </button>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs text-slate-400 font-medium">Tốc độ mô phỏng:</span>
+                        <div class="inline-flex rounded-md shadow-sm">
+                            <button onclick="setSpeedMult(0.5)" id="speed-0-5" class="px-2.5 py-1 text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 rounded-l-md transition-all">0.5x</button>
+                            <button onclick="setSpeedMult(1.0)" id="speed-1-0" class="px-2.5 py-1 text-xs font-semibold bg-indigo-600 text-white rounded-none transition-all">1.0x (Chuẩn)</button>
+                            <button onclick="setSpeedMult(2.0)" id="speed-2-0" class="px-2.5 py-1 text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 rounded-r-md transition-all">2.0x</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Interactive Variables / Slider Controls -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl">
+                <h3 class="font-bold text-slate-200 flex items-center gap-2 mb-6">
+                    <i class="fa-solid fa-sliders text-purple-400"></i> Bảng Điều Chỉnh Thông Số Vật Lý
+                </h3>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <!-- Slider 1: n (Initial gap) -->
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800/80 hover:border-indigo-500/30 transition-all">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm font-semibold text-slate-300 flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+                                Khoảng cách ban đầu (n)
+                            </span>
+                            <span class="px-2 py-0.5 bg-indigo-950 text-indigo-400 rounded text-xs font-bold border border-indigo-900" id="n-val-display">50 m</span>
+                        </div>
+                        <input type="range" id="input-n" min="10" max="100" step="5" value="50" oninput="updateParams()" class="w-full accent-indigo-500 cursor-pointer bg-slate-800 rounded-lg appearance-none h-2">
+                        <div class="flex justify-between text-[10px] text-slate-500 mt-2">
+                            <span>Mức tối thiểu: 10m</span>
+                            <span>Mức tối đa: 100m</span>
+                        </div>
+                    </div>
+
+                    <!-- Slider 2: v1 (Speed of Car 1) -->
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800/80 hover:border-emerald-500/30 transition-all">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm font-semibold text-slate-300 flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                Tốc độ Xe 1 (v₁)
+                            </span>
+                            <span class="px-2 py-0.5 bg-emerald-950 text-emerald-400 rounded text-xs font-bold border border-emerald-900" id="v1-val-display">10 m/s</span>
+                        </div>
+                        <input type="range" id="input-v1" min="1" max="25" step="1" value="10" oninput="updateParams()" class="w-full accent-emerald-500 cursor-pointer bg-slate-800 rounded-lg appearance-none h-2">
+                        <div class="flex justify-between text-[10px] text-slate-500 mt-2">
+                            <span>Cực chậm: 1 m/s</span>
+                            <span>Cực nhanh: 25 m/s</span>
+                        </div>
+                    </div>
+
+                    <!-- Slider 3: v2 (Speed of Car 2) -->
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800/80 hover:border-red-500/30 transition-all">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm font-semibold text-slate-300 flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-red-500"></span>
+                                Tốc độ Xe 2 (v₂)
+                            </span>
+                            <span class="px-2 py-0.5 bg-red-950 text-red-400 rounded text-xs font-bold border border-red-900" id="v2-val-display">18 m/s</span>
+                        </div>
+                        <input type="range" id="input-v2" min="0" max="35" step="1" value="18" oninput="updateParams()" class="w-full accent-red-500 cursor-pointer bg-slate-800 rounded-lg appearance-none h-2">
+                        <div class="flex justify-between text-[10px] text-slate-500 mt-2">
+                            <span>Đứng yên: 0 m/s</span>
+                            <span>Cực nhanh: 35 m/s</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Real-time Plotting Graph -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-bold text-slate-200 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-line text-blue-400"></i> Đồ Thị Vị Trí - Thời Gian (x - t)
+                    </h3>
+                    <div class="text-[11px] text-slate-400 flex items-center gap-3">
+                        <span class="flex items-center gap-1"><span class="w-3 h-0.5 bg-emerald-500 inline-block"></span> Xe 1 (vịch xuất phát từ $n$)</span>
+                        <span class="flex items-center gap-1"><span class="w-3 h-0.5 bg-red-500 inline-block"></span> Xe 2 (vạch xuất phát từ $0$)</span>
+                    </div>
+                </div>
+                
+                <div class="bg-slate-950 rounded-xl border border-slate-800 p-4 relative">
+                    <!-- Custom HTML5 Canvas Plot -->
+                    <canvas id="graphCanvas" class="w-full h-64 block"></canvas>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right Side: Educational Panel, Challenges & Quizzes (4 cols) -->
+        <div class="lg:col-span-4 flex flex-col space-y-6">
+            
+            <!-- Formulas & Theory Card -->
+            <div class="bg-gradient-to-br from-indigo-950/50 to-slate-900 border border-indigo-900/30 rounded-2xl p-5 shadow-xl relative overflow-hidden">
+                <div class="absolute -right-12 -bottom-12 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl"></div>
+                <h3 class="font-bold text-indigo-300 flex items-center gap-2 mb-3 text-base">
+                    <i class="fa-solid fa-book-open"></i> Thư Viện Kiến Thức Lớp 6
+                </h3>
+                
+                <div class="space-y-3.5 text-xs text-slate-300">
+                    <p class="leading-relaxed">
+                        Hãy cùng ghi nhớ các công thức tính quãng đường và vận tốc cơ bản nhé:
+                    </p>
+                    <div class="bg-slate-950/80 p-3 rounded-lg border border-slate-800/80 font-mono">
+                        <div class="text-slate-400 mb-1">Công thức đường đi (vị trí):</div>
+                        <div class="text-emerald-400">Xe 1: <strong class="text-emerald-300">x₁ = n + v₁ × t</strong></div>
+                        <div class="text-red-400 mt-1">Xe 2: <strong class="text-red-300">x₂ = v₂ × t</strong></div>
+                    </div>
+                    
+                    <div class="bg-slate-950/80 p-3 rounded-lg border border-slate-800/80 font-mono">
+                        <div class="text-slate-400 mb-1">Khi Xe 2 đuổi kịp Xe 1 (x₁ = x₂):</div>
+                        <div class="text-indigo-300 font-bold text-center py-1 bg-indigo-950/50 rounded mt-1">t_đuổi_kịp = n / (v₂ - v₁)</div>
+                        <div class="text-[10px] text-slate-400 mt-1 text-center italic">*Điều kiện: v₂ phải lớn hơn v₁</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Interactive Challenges for Students -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+                <h3 class="font-bold text-yellow-400 flex items-center gap-2 mb-3 text-base">
+                    <i class="fa-solid fa-trophy"></i> Thử Thách Cho Em!
+                </h3>
+                <p class="text-slate-400 text-xs mb-4">Hoàn thành các bài tập dưới đây bằng cách tinh chỉnh các thanh điều khiển và nhấn chạy mô phỏng:</p>
+
+                <div class="space-y-4">
+                    <!-- Challenge 1 -->
+                    <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800 hover:border-slate-700 transition-all text-xs">
+                        <div class="flex justify-between items-start gap-2 mb-2">
+                            <span class="font-bold text-slate-200">Thử Thách 1: Đuổi Kịp Sau 5 Giây</span>
+                            <span class="px-1.5 py-0.5 bg-yellow-950 text-yellow-500 rounded text-[9px] uppercase font-bold tracking-wider">Mức dễ</span>
+                        </div>
+                        <p class="text-slate-400 leading-relaxed mb-3">
+                            Đặt <strong class="text-indigo-400">n = 50m</strong> và tốc độ của xe đi trước <strong class="text-emerald-400">v₁ = 10 m/s</strong>. 
+                            Hãy chỉnh tốc độ Xe 2 (<strong class="text-red-400">v₂</strong>) bao nhiêu để đuổi kịp Xe 1 sau đúng <strong class="text-yellow-400">5.0 giây</strong>?
+                        </p>
+                        <div class="flex items-center justify-between gap-2">
+                            <button onclick="setupChallenge1()" class="text-indigo-400 hover:underline font-semibold flex items-center gap-1">
+                                <i class="fa-solid fa-magic-wand-sparkles"></i> Đặt thông số mẫu
+                            </button>
+                            <button onclick="checkChallenge1()" class="bg-indigo-600/30 hover:bg-indigo-600 text-indigo-300 hover:text-white px-3 py-1 rounded font-bold transition-all">
+                                Kiểm tra
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Challenge 2 -->
+                    <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800 hover:border-slate-700 transition-all text-xs">
+                        <div class="flex justify-between items-start gap-2 mb-2">
+                            <span class="font-bold text-slate-200">Thử Thách 2: Cuộc Đua Bất Tận</span>
+                            <span class="px-1.5 py-0.5 bg-red-950 text-red-500 rounded text-[9px] uppercase font-bold tracking-wider">Mức trung bình</span>
+                        </div>
+                        <p class="text-slate-400 leading-relaxed mb-3">
+                            Nếu Xe 1 (<strong class="text-emerald-400">v₁</strong>) chạy nhanh hơn hoặc bằng Xe 2 (<strong class="text-red-400">v₂</strong>). 
+                            Chuyện gì sẽ xảy ra? Hãy chỉnh các thanh gạt sao cho Xe 2 <strong class="text-red-400">không bao giờ</strong> đuổi kịp Xe 1.
+                        </p>
+                        <div class="flex items-center justify-between gap-2">
+                            <button onclick="setupChallenge2()" class="text-indigo-400 hover:underline font-semibold flex items-center gap-1">
+                                <i class="fa-solid fa-magic-wand-sparkles"></i> Đặt thông số mẫu
+                            </button>
+                            <button onclick="checkChallenge2()" class="bg-indigo-600/30 hover:bg-indigo-600 text-indigo-300 hover:text-white px-3 py-1 rounded font-bold transition-all">
+                                Kiểm tra
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Mini Quiz -->
+            <div id="quiz-container" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+                <h3 class="font-bold text-emerald-400 flex items-center gap-2 mb-3 text-base">
+                    <i class="fa-solid fa-question-circle"></i> Trắc Nghiệm Nhanh
+                </h3>
+                
+                <!-- Quiz Area -->
+                <div id="quiz-body" class="space-y-4 text-xs">
+                    <div class="flex items-center gap-2 text-slate-400 mb-1">
+                        <span class="px-1.5 py-0.5 bg-slate-800 rounded font-bold" id="quiz-num">Câu 1/2</span>
+                    </div>
+                    
+                    <p id="quiz-question" class="font-semibold text-slate-200 leading-relaxed">
+                        Nếu hai xe có tốc độ bằng nhau (v₁ = v₂), thì khoảng cách giữa chúng sẽ thay đổi thế nào theo thời gian?
+                    </p>
+
+                    <div class="space-y-2" id="quiz-options">
+                        <!-- Options injected dynamically by JS -->
+                    </div>
+
+                    <div id="quiz-feedback" class="hidden p-3 rounded-lg text-xs leading-relaxed"></div>
+
+                    <div class="flex justify-end pt-2">
+                        <button id="btn-next-quiz" onclick="nextQuiz()" class="hidden bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-1.5 px-4 rounded-lg transition-all">
+                            Câu tiếp theo <i class="fa-solid fa-arrow-right ml-1"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-slate-950 border-t border-slate-900 py-6 text-center text-xs text-slate-500 mt-10">
+        <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <p>© 2026 Chân Trời Sáng Tạo - Học cụ ảo mô phỏng Vật Lý 6.</p>
+            <p>Hỗ trợ học sinh khám phá thế giới tự nhiên bằng phương pháp trực quan.</p>
+        </div>
+    </footer>
+
+    <!-- Sound FX Simulation helper (Pure JS synthesised beep using Web Audio API to satisfy instructions) -->
+    <script>
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playSound(freq, duration) {
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            } catch (e) {
+                // Audio context may require user interaction first
+            }
+        }
+
+        // Global state variables
+        let n = 50;  // Initial gap (m)
+        let v1 = 10; // Speed of Car 1 (m/s)
+        let v2 = 18; // Speed of Car 2 (m/s)
+
+        let t = 0;   // Current elapsed time (seconds)
+        let isPlaying = false;
+        let animationFrameId = null;
+        let speedMultiplier = 1.0;
+
+        // Visual limits configuration
+        const ROAD_START_PX = 40;     // px corresponding to 0m (Car 2's start)
+        const PIXELS_PER_METER = 2.4;  // Scaling factor for visual track width representation
+        const MAX_METERS = 240;       // Max visual limit on the screen before they drive off-screen
+
+        // Graphing data structure
+        let timeHistory = [];
+        let pos1History = [];
+        let pos2History = [];
+
+        // DOM elements references
+        const elCar1 = document.getElementById('car1');
+        const elCar2 = document.getElementById('car2');
+        const elCar1SpeedLbl = document.getElementById('car1-speed-lbl');
+        const elCar2SpeedLbl = document.getElementById('car2-speed-lbl');
+        
+        const elInputN = document.getElementById('input-n');
+        const elInputV1 = document.getElementById('input-v1');
+        const elInputV2 = document.getElementById('input-v2');
+
+        const elNValDisp = document.getElementById('n-val-display');
+        const elV1ValDisp = document.getElementById('v1-val-display');
+        const elV2ValDisp = document.getElementById('v2-val-display');
+
+        const elTimerVal = document.getElementById('timer-val');
+        const elDistanceVal = document.getElementById('distance-val');
+        const elCatchVerdict = document.getElementById('catch-verdict');
+        const elSimStatus = document.getElementById('sim-status');
+
+        const elBtnPlay = document.getElementById('btn-play');
+        const elPlayIcon = document.getElementById('play-icon');
+        const elPlayText = document.getElementById('play-text');
+
+        const canvas = document.getElementById('graphCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Initialize and handle canvas sizing
+        function setupCanvas() {
+            const rect = canvas.parentNode.getBoundingClientRect();
+            // High DPI Canvas display handling
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = 240 * dpr;
+            canvas.style.width = rect.width + 'px';
+            canvas.style.height = '240px';
+            ctx.scale(dpr, dpr);
+            drawGraph();
+        }
+
+        window.addEventListener('resize', setupCanvas);
+
+        // Update slider values dynamically & synchronize parameters
+        function updateParams() {
+            n = parseFloat(elInputN.value);
+            v1 = parseFloat(elInputV1.value);
+            v2 = parseFloat(elInputV2.value);
+
+            // Display values
+            elNValDisp.innerText = n + ' m';
+            elV1ValDisp.innerText = v1 + ' m/s';
+            elV2ValDisp.innerText = v2 + ' m/s';
+
+            elCar1SpeedLbl.innerText = v1;
+            elCar2SpeedLbl.innerText = v2;
+
+            if (!isPlaying) {
+                // If paused, update car start positions immediately on screen
+                t = 0;
+                resetPlotData();
+                updateVisuals();
+            }
+        }
+
+        // Reset the simulation metrics to standard/current sliders
+        function resetSimulation() {
+            isPlaying = false;
+            cancelAnimationFrame(animationFrameId);
+            t = 0;
+            
+            // Revert state indicators
+            elPlayIcon.className = 'fa-solid fa-play';
+            elPlayText.innerText = 'Bắt đầu chạy';
+            elSimStatus.innerText = 'Đang dừng';
+            elSimStatus.className = 'px-3 py-1 bg-slate-800 text-slate-400 rounded-full text-xs font-medium border border-slate-700';
+            
+            resetPlotData();
+            updateVisuals();
+        }
+
+        function resetPlotData() {
+            timeHistory = [0];
+            pos1History = [n];
+            pos2History = [0];
+        }
+
+        // Play and pause handling
+        function togglePlay() {
+            if (isPlaying) {
+                isPlaying = false;
+                elPlayIcon.className = 'fa-solid fa-play';
+                elPlayText.innerText = 'Tiếp tục';
+                elSimStatus.innerText = 'Tạm dừng';
+                elSimStatus.className = 'px-3 py-1 bg-amber-950/80 text-amber-400 rounded-full text-xs font-medium border border-amber-800';
+                cancelAnimationFrame(animationFrameId);
+                playSound(400, 0.1);
+            } else {
+                isPlaying = true;
+                elPlayIcon.className = 'fa-solid fa-pause';
+                elPlayText.innerText = 'Tạm dừng';
+                elSimStatus.innerText = 'Đang chạy...';
+                elSimStatus.className = 'px-3 py-1 bg-emerald-950/80 text-emerald-400 rounded-full text-xs font-medium border border-emerald-800';
+                playSound(600, 0.15);
+                lastTime = performance.now();
+                simulationLoop();
+            }
+        }
+
+        // STEP SIMULATION (Single frame step forward for manual control)
+        function stepSim() {
+            if (isPlaying) togglePlay();
+            t += 0.2;
+            updatePositions();
+            updateVisuals();
+            playSound(500, 0.05);
+        }
+
+        // Speed multi modifier
+        function setSpeedMult(multiplier) {
+            speedMultiplier = multiplier;
+            
+            // Adjust active UI button classes
+            const btns = {
+                0.5: document.getElementById('speed-0-5'),
+                1.0: document.getElementById('speed-1-0'),
+                2.0: document.getElementById('speed-2-0')
+            };
+
+            for (const key in btns) {
+                if (parseFloat(key) === multiplier) {
+                    btns[key].className = 'px-2.5 py-1 text-xs font-semibold bg-indigo-600 text-white transition-all';
+                } else {
+                    btns[key].className = 'px-2.5 py-1 text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all';
+                }
+            }
+        }
+
+        let lastTime = 0;
+        function simulationLoop() {
+            if (!isPlaying) return;
+            
+            const now = performance.now();
+            // Calculate time delta in seconds
+            const delta = (now - lastTime) / 1000;
+            lastTime = now;
+
+            // Advance virtual simulation time adjusted by speed factor
+            t += delta * speedMultiplier;
+
+            updatePositions();
+            updateVisuals();
+
+            // Loop animation frame
+            animationFrameId = requestAnimationFrame(simulationLoop);
+        }
+
+        function updatePositions() {
+            // Keep calculating up to 100s, prevent memory hogging
+            if (t > 100) {
+                togglePlay();
+                return;
+            }
+
+            const x1 = n + v1 * t;
+            const x2 = v2 * t;
+
+            // Push values for graph rendering
+            if (timeHistory[timeHistory.length - 1] < t) {
+                timeHistory.push(t);
+                pos1History.push(x1);
+                pos2History.push(x2);
+            }
+        }
+
+        // Updates DOM render styles of the vehicles and info boards
+        function updateVisuals() {
+            const x1 = n + v1 * t;
+            const x2 = v2 * t;
+
+            // Position conversion to px
+            const px1 = ROAD_START_PX + x1 * PIXELS_PER_METER;
+            const px2 = ROAD_START_PX + x2 * PIXELS_PER_METER;
+
+            // Ensure cars stay within visual box wrapper bounds beautifully (slide away if over scale)
+            elCar1.style.left = px1 + 'px';
+            elCar2.style.left = px2 + 'px';
+
+            // Show current metrics on screen
+            elTimerVal.innerText = t.toFixed(2) + 's';
+            
+            const distance = x1 - x2;
+            
+            if (distance > 0) {
+                elDistanceVal.innerText = distance.toFixed(1) + ' m';
+                elDistanceVal.className = 'text-amber-400 font-bold text-sm';
+                elCatchVerdict.innerHTML = `<span class="text-blue-400 flex items-center gap-1"><i class="fa-solid fa-hourglass-half"></i> Xe 2 đang bám theo...</span>`;
+            } else if (Math.abs(distance) < 0.5) {
+                elDistanceVal.innerText = 'Đuổi kịp!';
+                elDistanceVal.className = 'text-emerald-400 font-extrabold text-sm animate-bounce';
+                elCatchVerdict.innerHTML = `<span class="text-emerald-400 flex items-center gap-1"><i class="fa-solid fa-circle-check"></i> Đã bắt kịp tại ${x1.toFixed(1)}m!</span>`;
+                // Play achievement sound once
+                if (isPlaying && Math.abs(distance) < 0.2) {
+                    playSound(880, 0.3);
+                }
+            } else {
+                elDistanceVal.innerText = 'Xe 2 vượt trước ' + Math.abs(distance).toFixed(1) + ' m';
+                elDistanceVal.className = 'text-red-400 font-bold text-sm';
+                elCatchVerdict.innerHTML = `<span class="text-pink-400 flex items-center gap-1"><i class="fa-solid fa-flag-checkered"></i> Xe 2 đã vượt trước!</span>`;
+            }
+
+            drawGraph();
+        }
+
+        // Draw the analytical Graph directly in the Canvas element
+        function drawGraph() {
+            const w = canvas.width / (window.devicePixelRatio || 1);
+            const h = canvas.height / (window.devicePixelRatio || 1);
+
+            ctx.clearRect(0, 0, w, h);
+
+            // Styling variables
+            const paddingLeft = 45;
+            const paddingRight = 20;
+            const paddingTop = 20;
+            const paddingBottom = 30;
+
+            const graphWidth = w - paddingLeft - paddingRight;
+            const graphHeight = h - paddingTop - paddingBottom;
+
+            // 1. Draw Grid Lines & Axes
+            ctx.strokeStyle = '#1e293b';
+            ctx.lineWidth = 1;
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '10px Inter';
+
+            // Draw horizontal coordinate lines (Position - m)
+            const maxValY = 150; // Max distance scaled on graph axis
+            const yLinesCount = 5;
+            for (let i = 0; i <= yLinesCount; i++) {
+                const yVal = (maxValY / yLinesCount) * i;
+                const yCoord = h - paddingBottom - (yVal / maxValY) * graphHeight;
+                
+                // Draw horizontal line
+                ctx.beginPath();
+                ctx.moveTo(paddingLeft, yCoord);
+                ctx.lineTo(w - paddingRight, yCoord);
+                ctx.stroke();
+
+                // Draw Y label
+                ctx.textAlign = 'right';
+                ctx.fillText(yVal + 'm', paddingLeft - 8, yCoord + 3);
+            }
+
+            // Draw vertical coordinate lines (Time - s)
+            const maxValX = 15; // Max scale in seconds
+            const xLinesCount = 5;
+            for (let i = 0; i <= xLinesCount; i++) {
+                const xVal = (maxValX / xLinesCount) * i;
+                const xCoord = paddingLeft + (xVal / maxValX) * graphWidth;
+
+                // Draw vertical line
+                ctx.beginPath();
+                ctx.moveTo(xCoord, paddingTop);
+                ctx.lineTo(xCoord, h - paddingBottom);
+                ctx.stroke();
+
+                // Draw X label
+                ctx.textAlign = 'center';
+                ctx.fillText(xVal + 's', xCoord, h - paddingBottom + 15);
+            }
+
+            // Draw Axis Labels
+            ctx.fillStyle = '#64748b';
+            ctx.font = 'bold 9px Inter';
+            ctx.fillText('Thời gian t (s)', w - paddingRight, h - paddingBottom + 25);
+            
+            ctx.save();
+            ctx.translate(15, paddingTop + 20);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText('Vị trí x (m)', 0, 0);
+            ctx.restore();
+
+            // 2. Draw Plot lines for both cars
+            if (timeHistory.length > 0) {
+                // Helper to project values to canvas coordinates
+                const getCoords = (time, pos) => {
+                    const cx = paddingLeft + (time / maxValX) * graphWidth;
+                    const cy = h - paddingBottom - (pos / maxValY) * graphHeight;
+                    return { x: cx, y: cy };
+                };
+
+                // Draw Xe 1 (Emerald/Green path)
+                ctx.beginPath();
+                ctx.strokeStyle = '#10b981';
+                ctx.lineWidth = 2.5;
+                for (let i = 0; i < timeHistory.length; i++) {
+                    const pt = getCoords(timeHistory[i], pos1History[i]);
+                    if (pt.x > w - paddingRight) break; // Clip within borders
+                    if (i === 0) ctx.moveTo(pt.x, pt.y);
+                    else ctx.lineTo(pt.x, pt.y);
+                }
+                ctx.stroke();
+
+                // Draw Xe 2 (Red/Chaser path)
+                ctx.beginPath();
+                ctx.strokeStyle = '#ef4444';
+                ctx.lineWidth = 2.5;
+                for (let i = 0; i < timeHistory.length; i++) {
+                    const pt = getCoords(timeHistory[i], pos2History[i]);
+                    if (pt.x > w - paddingRight) break;
+                    if (i === 0) ctx.moveTo(pt.x, pt.y);
+                    else ctx.lineTo(pt.x, pt.y);
+                }
+                ctx.stroke();
+
+                // 3. Highlight catch intersection point dynamically
+                if (v2 > v1) {
+                    const catchTime = n / (v2 - v1);
+                    const catchPos = v2 * catchTime;
+                    if (catchTime <= maxValX && catchPos <= maxValY) {
+                        const catchPt = getCoords(catchTime, catchPos);
+                        ctx.beginPath();
+                        ctx.arc(catchPt.x, catchPt.y, 5, 0, Math.PI * 2);
+                        ctx.fillStyle = '#eab308';
+                        ctx.fill();
+                        ctx.strokeStyle = '#151f32';
+                        ctx.lineWidth = 1.5;
+                        ctx.stroke();
+
+                        // Label Gặp nhau
+                        ctx.fillStyle = '#eab308';
+                        ctx.font = 'bold 9px Inter';
+                        ctx.textAlign = 'left';
+                        ctx.fillText(` Giao điểm (${catchTime.toFixed(1)}s, ${catchPos.toFixed(0)}m)`, catchPt.x + 6, catchPt.y - 2);
+                    }
+                }
+            }
+        }
+
+        // Pedagogical Challenges Triggers
+        function setupChallenge1() {
+            resetSimulation();
+            elInputN.value = 50;
+            elInputV1.value = 10;
+            elInputV2.value = 15; // Setup correct first step
+            updateParams();
+            playSound(520, 0.25);
+        }
+
+        function checkChallenge1() {
+            // Formula: t = n / (v2 - v1) -> 5 = 50 / (v2 - 10) -> v2 - 10 = 10 -> v2 = 20 m/s
+            if (n === 50 && v1 === 10 && v2 === 20) {
+                showModal('Hoan hô! 🎉', 'Tuyệt vời! Em đã giải chính xác bài toán. Xe 2 chạy với vận tốc 20 m/s sẽ đuổi kịp Xe 1 đúng sau 5.0 giây tại mốc 100m. Hãy ấn Chạy Mô phỏng để xem thành quả nhé!', 'success');
+            } else {
+                showModal('Thử lại chút nào! 💡', `Hãy tính kỹ: t = n / (v₂ - v₁).<br>Khi thay số: 5 = 50 / (v₂ - 10).<br>Em hãy tìm xem v₂ bằng bao nhiêu để biểu thức này đúng nhé! Hiện tại v₂ của em đang là ${v2} m/s.`, 'error');
+            }
+        }
+
+        function setupChallenge2() {
+            resetSimulation();
+            elInputN.value = 60;
+            elInputV1.value = 15;
+            elInputV2.value = 10; // Red car slower
+            updateParams();
+            playSound(520, 0.25);
+        }
+
+        function checkChallenge2() {
+            if (v2 <= v1) {
+                showModal('Chính xác! 👏', `Tuyệt vời! Khi v₂ (${v2} m/s) nhỏ hơn hoặc bằng v₁ (${v1} m/s), Xe 2 xuất phát từ phía sau sẽ không bao giờ đuổi kịp Xe 1 đi trước. Khoảng cách giữa chúng sẽ ngày càng xa hơn (nếu v₂ < v₁) hoặc được giữ nguyên mãi mãi (nếu v₂ = v₁).`, 'success');
+            } else {
+                showModal('Chưa đúng rồi! 🤔', `Hãy quan sát xem! Hiện tại v₂ (${v2} m/s) vẫn lớn hơn v₁ (${v1} m/s). Do đó, Xe 2 sớm muộn vẫn sẽ đuổi kịp Xe 1. Hãy kéo thanh gạt v₂ nhỏ hơn hoặc bằng v₁ nhé.`, 'error');
+            }
+        }
+
+        // Interactive Quizzes list
+        const quizData = [
+            {
+                question: "Nếu hai xe có tốc độ bằng nhau (v₁ = v₂ = 10 m/s), thì khoảng cách giữa chúng sẽ thay đổi thế nào khi chạy?",
+                options: [
+                    "Khoảng cách tăng dần theo thời gian",
+                    "Khoảng cách giảm dần cho đến khi đuổi kịp",
+                    "Không thay đổi, luôn giữ nguyên bằng khoảng cách n ban đầu",
+                    "Hai xe sẽ ngay lập tức đâm vào nhau"
+                ],
+                correct: 2,
+                explanation: "Vì cả hai xe di chuyển cùng một vận tốc, mỗi giây quãng đường đi được là như nhau, nên khoảng cách giữa chúng luôn bảo toàn không đổi bằng n."
+            },
+            {
+                question: "Khoảng cách ban đầu n = 40m. Xe 1 đi với tốc độ 5 m/s, Xe 2 đuổi theo với tốc độ 15 m/s. Xe 2 đuổi kịp Xe 1 sau bao lâu?",
+                options: [
+                    "2 giây",
+                    "4 giây",
+                    "8 giây",
+                    "10 giây"
+                ],
+                correct: 1,
+                explanation: "Thời gian đuổi kịp: t = n / (v₂ - v₁) = 40 / (15 - 5) = 40 / 10 = 4 giây!"
+            }
+        ];
+
+        let currentQuizIndex = 0;
+
+        function renderQuiz() {
+            const quiz = quizData[currentQuizIndex];
+            document.getElementById('quiz-num').innerText = `Câu ${currentQuizIndex + 1}/${quizData.length}`;
+            document.getElementById('quiz-question').innerText = quiz.question;
+
+            const optionsContainer = document.getElementById('quiz-options');
+            optionsContainer.innerHTML = '';
+
+            quiz.options.forEach((opt, idx) => {
+                const btn = document.createElement('button');
+                btn.className = "w-full text-left p-3 rounded-lg bg-slate-950 border border-slate-800 hover:border-indigo-500 hover:bg-slate-900 transition-all focus:outline-none flex items-start gap-2.5";
+                btn.innerHTML = `
+                    <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-800 text-[10px] font-bold text-slate-400 mt-0.5">${String.fromCharCode(65 + idx)}</span>
+                    <span class="flex-1">${opt}</span>
+                `;
+                btn.onclick = () => selectQuizOption(idx);
+                optionsContainer.appendChild(btn);
+            });
+
+            document.getElementById('quiz-feedback').className = 'hidden p-3 rounded-lg text-xs leading-relaxed';
+            document.getElementById('btn-next-quiz').classList.add('hidden');
+        }
+
+        function selectQuizOption(selectedIdx) {
+            const quiz = quizData[currentQuizIndex];
+            const feedback = document.getElementById('quiz-feedback');
+            const btns = document.getElementById('quiz-options').children;
+
+            // Lock further clicks
+            for (let btn of btns) {
+                btn.disabled = true;
+            }
+
+            if (selectedIdx === quiz.correct) {
+                // Correct styling
+                btns[selectedIdx].className = "w-full text-left p-3 rounded-lg bg-emerald-950/60 border border-emerald-500/50 text-emerald-200 flex items-start gap-2.5";
+                feedback.className = "p-3 bg-emerald-950/40 text-emerald-300 border border-emerald-900/50 rounded-lg text-xs leading-relaxed";
+                feedback.innerHTML = `<strong>Chính Xác! 🎉</strong> ${quiz.explanation}`;
+                playSound(900, 0.2);
+            } else {
+                // Incorrect styling
+                btns[selectedIdx].className = "w-full text-left p-3 rounded-lg bg-red-950/60 border border-red-500/50 text-red-200 flex items-start gap-2.5";
+                btns[quiz.correct].className = "w-full text-left p-3 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 flex items-start gap-2.5";
+                feedback.className = "p-3 bg-slate-950 text-slate-300 border border-slate-800 rounded-lg text-xs leading-relaxed";
+                feedback.innerHTML = `<strong>Rất tiếc, chưa đúng rồi! 😢</strong> Đáp án đúng là <strong>${String.fromCharCode(65 + quiz.correct)}</strong>.<br>${quiz.explanation}`;
+                playSound(300, 0.25);
+            }
+
+            document.getElementById('btn-next-quiz').classList.remove('hidden');
+        }
+
+        function nextQuiz() {
+            currentQuizIndex = (currentQuizIndex + 1) % quizData.length;
+            renderQuiz();
+        }
+
+        // Custom Beautiful Modal Dialog Box for feedback
+        function showModal(title, bodyText, type) {
+            // Remove existing modals if any
+            const existing = document.getElementById('custom-modal');
+            if (existing) existing.remove();
+
+            const modal = document.createElement('div');
+            modal.id = 'custom-modal';
+            modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in';
+            
+            const colorClass = type === 'success' ? 'border-emerald-500/50 shadow-emerald-500/10' : 'border-red-500/50 shadow-red-500/10';
+            const icon = type === 'success' ? 'fa-circle-check text-emerald-400' : 'fa-triangle-exclamation text-yellow-500';
+
+            modal.innerHTML = `
+                <div class="bg-slate-900 border ${colorClass} rounded-2xl p-6 max-w-sm w-full shadow-2xl transition-all scale-95 transform duration-300 flex flex-col items-center text-center">
+                    <i class="fa-solid ${icon} text-4xl mb-4"></i>
+                    <h4 class="text-base font-bold text-slate-100 mb-2">${title}</h4>
+                    <p class="text-xs text-slate-300 leading-relaxed mb-5">${bodyText}</p>
+                    <button onclick="document.getElementById('custom-modal').remove()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 rounded-lg text-xs transition-all">
+                        Đóng và tiếp tục
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            playSound(type === 'success' ? 700 : 350, 0.15);
+        }
+
+        // Window load initializations
+        window.onload = function () {
+            updateParams();
+            setupCanvas();
+            renderQuiz();
+            resetPlotData();
+        }
+    </script>
+</body>
+</html>
