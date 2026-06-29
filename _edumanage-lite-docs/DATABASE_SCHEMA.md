@@ -82,7 +82,7 @@ Mở rộng thông tin người dùng từ Supabase Auth.
 | `full_name` | text | Có | Họ tên hiển thị |
 | `role` | text | Có | `admin`, `moderator`, `teacher`, `student` |
 | `student_code` | text | Không | Mã sinh viên, unique nếu có |
-| `teacher_code` | text | Không | Mã giảng viên, unique nếu có |
+| `role_code` | text | Không | Mã nhân sự, unique nếu có; dùng cho `admin`, `moderator`, `teacher` |
 | `status` | text | Có | `active`, `inactive`, `archived` |
 | `access_status` | text | Có | `pending_approval`, `active`, `suspended`, `expired` |
 | `access_expires_at` | timestamptz | Không | Mốc hết hạn truy cập tài khoản sinh viên |
@@ -104,9 +104,10 @@ Dong bo voi Supabase Auth:
 - Trigger `on_auth_user_created` tren `auth.users` goi function `public.handle_new_auth_user()` de tao/upsert profile tu dong.
 - Trigger uu tien lay role tu `raw_app_meta_data.role`, sau do fallback `raw_user_meta_data.role`; neu khong hop le thi fallback role `student`.
 - Trigger lay `full_name` tu `raw_user_meta_data.full_name`, neu thieu thi fallback phan truoc dau @ cua email.
-- Trigger mac dinh `access_status = 'pending_approval'` voi sinh vien tu dang ky va cho duyet truy cap.
+- Trong luong hien hanh, tai khoan sinh vien do Admin tao trong `User management`; public self-signup da khoa tren UI login.
+- Neu he thong van nhan du lieu `student` tu luong public/legacy, trigger fallback `access_status = 'pending_approval'` de giu tuong thich voi workflow duyet/gia han truy cap.
 - `approved_by` chi chap nhan actor role `admin`, `moderator`, hoac `teacher` co scope hop le.
-- Tai khoan `teacher` va `moderator` khong di qua self-signup; duoc tao boi `admin` trong User management.
+- Tai khoan `admin`, `teacher` va `moderator` dung `role_code`; tai khoan `student` dung `student_code`.
 
 RLS bo sung cho admin:
 
@@ -177,7 +178,7 @@ Quản lý học phần.
 | Cột | Kiểu | Bắt buộc | Ghi chú |
 |---|---|---|---|
 | `id` | uuid | Có | PK |
-| `owner_id` | uuid | Có | FK `profiles.id`, giảng viên sở hữu |
+| `owner_id` | uuid | Có | FK `profiles.id`, giám sát viên phụ trách học phần |
 | `code` | text | Có | Mã học phần |
 | `title` | text | Có | Tên học phần |
 | `description` | text | Không | Mô tả học phần |
@@ -187,7 +188,7 @@ Quản lý học phần.
 | `knowledge_block` | text | Không | `general`, `foundation`, `major` tương ứng Đại cương, Cơ sở ngành, Ngành/Chuyên ngành |
 | `course_type` | text | Không | `required`, `elective` tương ứng Bắt buộc/Tự chọn |
 | `clo_items` | jsonb | Có | Danh sách `{ code, description }` của CLO |
-| `assessment_components` | jsonb | Có | Danh sách `{ type, weight }`, tổng trọng số nghiệp vụ phải bằng 100% khi nhập |
+| `assessment_components` | jsonb | Có | Danh sách `{ type, weight, cloCodes }`, với `type` thuộc `diagnostic/frequent/periodic/final`, tổng trọng số nghiệp vụ phải bằng 100% khi nhập |
 | `created_at` | timestamptz | Có | Default now |
 | `updated_at` | timestamptz | Có | Auto update |
 
@@ -204,10 +205,9 @@ check (course_type is null or course_type in ('required', 'elective'));
 
 RLS/quyen:
 
-- Owner (teacher) doc/tao/cap nhat hoc phan cua chinh minh.
-- Admin doc va quan ly tat ca hoc phan qua JWT claim `app_metadata.role = 'admin'`.
-- Moderator doc/cap nhat hoc phan trong `permission_scopes` active.
-- Mod tao hoc phan qua `course_change_requests(action='create')`; Admin duyet moi tao course that va cap scope mac dinh cho Mod.
+- Moderator la actor van hanh chinh cua hoc phan: tao/cap nhat/lưu trữ/xóa hoc phan truc tiep.
+- Admin khong con tham gia luong nghiep vu hoc phan; vai tro nay danh cho quan tri he thong va bao cao tong hop.
+- `permission_scopes` van duoc giu cho cac luong lien quan den lop/tai nguyen, nhung khong con dung de buoc Mod phai cho duyet hoc phan.
 
 ---
 
@@ -225,6 +225,7 @@ Quản lý lớp học phần.
 | `semester` | text | Không | Ví dụ: HK1 |
 | `academic_year` | text | Không | Ví dụ: 2026-2027 |
 | `status` | text | Có | `draft`, `active`, `archived` |
+| `is_open_for_enrollment` | boolean | Có | Chỉ khi `true` lớp mới xuất hiện ở khung đăng ký công khai trên trang đăng nhập |
 | `created_at` | timestamptz | Có | Default now |
 | `updated_at` | timestamptz | Có | Auto update |
 
@@ -238,14 +239,61 @@ check (status in ('draft', 'active', 'archived'));
 Trang thai trien khai:
 
 - Da duoc tao qua migration `202605280006_create_classes.sql` de ho tro membership-based material access.
+- Migration `202606290002_class_public_enrollment_visibility.sql` bo sung `is_open_for_enrollment` de tach ro `lop active` va `lop dang mo dang ky`.
+- Migration `202606290006_class_auto_enrollment_approval.sql` bo sung `auto_approve_enrollment` de teacher bat/tat che do duyet tu dong yeu cau tham gia lop.
 - Migration `202605280009_student_class_read_policy.sql` bo sung helper `public.has_active_membership_for_class(target_class_id uuid)` va policy cho student doc lop theo active membership.
 - Migration `202605280013_phase33_student_access_rls_enforcement.sql` cap nhat helper membership de bat buoc `public.is_student_access_active(auth.uid())` truoc khi cho student doc `classes`/`materials`.
 
 ---
 
+## 8. Bảng `assessments`
+
+Luu bai kiem tra theo lop hoc, co snapshot thanh phan danh gia va danh sach CLO ap dung.
+
+| Cột | Kiểu | Bắt buộc | Ghi chú |
+|---|---|---|---|
+| `id` | uuid | Có | PK |
+| `class_id` | uuid | Có | FK `classes.id` |
+| `course_id` | uuid | Có | FK `courses.id` |
+| `created_by` | uuid | Có | FK `profiles.id` |
+| `title` | text | Có | Tieu de bai kiem tra |
+| `description` | text | Không | Mo ta ngan |
+| `delivery_mode` | text | Có | `external` hoac `internal` |
+| `provider` | text | Có | `google_form`, `microsoft_form`, `manual`, `internal`, `other` |
+| `form_url` | text | Không | Link bieu mau ngoai neu co |
+| `embed_mode` | text | Có | `iframe`, `new_tab`, `disabled` |
+| `assessment_component_type` | text | Không | Snapshot thanh phan danh gia: `diagnostic`, `frequent`, `periodic`, `final` |
+| `assessment_clo_codes` | jsonb | Có | Snapshot mang ma CLO cua assessment, mac dinh `[]` |
+| `max_score` | numeric | Không | Diem toi da |
+| `attempt_limit` | int | Có | So luot lam toi da |
+| `shuffle_questions` | boolean | Có | Co tron cau hoi hay khong |
+| `show_feedback_after_submit` | boolean | Có | Hien feedback sau nop doi voi internal |
+| `time_limit_minutes` | int | Không | Gioi han thoi gian |
+| `status` | text | Có | `draft`, `open`, `closed`, `archived` |
+| `open_at` | timestamptz | Không | Thoi diem mo |
+| `due_at` | timestamptz | Không | Han nop |
+| `created_at` | timestamptz | Có | Default now |
+
+Constraint:
+
+```sql
+check (delivery_mode in ('external', 'internal'));
+check (provider in ('google_form', 'microsoft_form', 'manual', 'internal', 'other'));
+check (embed_mode in ('iframe', 'new_tab', 'disabled'));
+check (assessment_component_type is null or assessment_component_type in ('diagnostic', 'frequent', 'periodic', 'final'));
+check (status in ('draft', 'open', 'closed', 'archived'));
+```
+
+Quy tac nghiep vu:
+
+- `assessment_component_type` va `assessment_clo_codes` la snapshot tai thoi diem tao assessment, khong tham chieu dong ve hoc phan luc render ket qua.
+- Import ket qua vao `submissions` van luu `score` tong; diem theo tung CLO di kem trong metadata cua submission de phuc vu import/export va dashboard chi tiet.
+
+---
+
 ## 7A. Bảng `course_change_requests`
 
-Luồng yêu cầu thay đổi học phần.
+Du lieu lich su cua luong yeu cau thay doi hoc phan cu.
 
 | Cột | Kiểu | Bắt buộc | Ghi chú |
 |---|---|---|---|
@@ -263,15 +311,15 @@ Luồng yêu cầu thay đổi học phần.
 | `requested_course_type` | text | Không | Bắt buộc/Tự chọn |
 | `requested_clo_items` | jsonb | Có | CLO đề nghị |
 | `requested_assessment_components` | jsonb | Có | Thành phần đánh giá đề nghị |
-| `assigned_moderator_id` | uuid | Không | Mod được giao quản lý khi Admin duyệt, mặc định là Mod tạo yêu cầu |
+| `assigned_moderator_id` | uuid | Không | Truong lich su cua luong cu, co the null trong nghiep vu moi |
 | `status` | text | Có | `pending_review`, `approved`, `rejected` |
 | `requested_by` | uuid | Có | FK `profiles.id` |
 | `reviewed_by` | uuid | Không | FK `profiles.id` |
 
 Quy tắc:
 
-- Mod tạo học phần bằng yêu cầu tạo học phần `action='create'`; Admin duyệt sẽ tạo course `active` và cấp `permission_scopes` course cho `assigned_moderator_id`.
-- Mod/Admin có thể duyệt lưu trữ; chỉ Admin duyệt xóa và duyệt yêu cầu tạo học phần.
+- Moderator tạo, sửa, lưu trữ và xóa học phần trực tiếp.
+- Bang nay khong con duoc dung trong luong nghiep vu hoc phan hien tai; chi giu lai de doc lich su neu he thong cu da ton tai du lieu.
 
 ## 7B. Bảng `class_change_requests`
 
@@ -288,13 +336,15 @@ Luồng yêu cầu mở/lưu trữ/xóa lớp học phần.
 | `semester` | text | Không | Học kỳ |
 | `academic_year` | text | Không | Năm học |
 | `requested_status` | text | Không | Trạng thái đề nghị khi tạo |
+| `requested_open_for_enrollment` | boolean | Không | Cờ đề nghị hiển thị công khai ở trang đăng nhập sau khi lớp được duyệt |
 | `status` | text | Có | `pending_review`, `approved`, `rejected` |
 | `requested_by` | uuid | Có | Giảng viên tạo yêu cầu mở lớp |
 
 Quy tắc:
 
 - Giảng viên gửi yêu cầu mở lớp; Mod/Admin duyệt mới sinh bản ghi `classes`.
-- Mod không tạo lớp trực tiếp và không quản lý bài kiểm tra; Mod xem thống kê theo các học phần được cấp scope.
+- Lớp được duyệt không tự động xuất hiện ở màn đăng nhập; chỉ xuất hiện khi `requested_open_for_enrollment = true` và được apply sang `classes.is_open_for_enrollment`.
+- Mod không tạo lớp trực tiếp; Mod duyệt yêu cầu thay đổi lớp theo scope và xem `Kết quả đánh giá học phần` của các học phần mình vận hành.
 - Admin không tạo lớp trực tiếp trong workflow chuẩn; Admin duyệt yêu cầu mở lớp hoặc can thiệp quản trị khi cần.
 
 ---
@@ -327,7 +377,8 @@ Trang thai trien khai:
 - Migration nay cung bo sung helper `public.has_active_class_membership_for_course(target_course_id uuid)` de tranh recursion trong RLS khi kiem tra membership.
 - Migration `202605280008_class_member_profile_lookup.sql` bo sung function `public.find_student_profiles_for_class_membership(...)` de teacher/admin resolve student profiles khi them/import membership ma khong mo rong read access tren toan bo bang `profiles`.
 - Migration `202605280013_phase33_student_access_rls_enforcement.sql` bo sung kiem tra `is_student_access_active` trong helper membership de chot luong chong truy cap voi `pending_approval` va `expired`.
-- UI teacher hien ho tro them sinh vien thu cong va import CSV bang header `fullName`/`ho ten`, `email`, `studentCode`/`ma sinh vien`.
+- UI teacher khong con them sinh vien thu cong hoac import CSV trong luong van hanh chinh.
+- Sinh vien tu gui `enrollment_requests`; teacher phu trach lop duyet thu cong hoac bat co `auto_approve_enrollment` de chap nhan ngay yeu cau moi.
 
 ---
 
@@ -434,6 +485,7 @@ Trang thai trien khai:
 - Da duoc tao qua migration `202606050002_class_resource_links.sql`.
 - Migration backfill cac material/simulation published hien co vao cac lop active cung hoc phan.
 - Manager doc/quan ly link theo `can_manage_class`; sinh vien doc link cua lop minh theo `has_active_membership_for_class`.
+- Trang `Tài nguyên lớp học` chi hien hai nhom tai nguyen de teacher chon: `Tài liệu dùng chung` (`course_id is null`) va tai nguyen gan voi dung `course_id` cua lop hien tai.
 - Khi bang nay ton tai, classroom chi hien tai nguyen da duoc link rieng cho lop; neu bang chua ton tai, service fallback ve cach hien thi theo hoc phan de tranh crash trong giai doan chua apply migration.
 
 ---
@@ -483,12 +535,13 @@ Trang thai trien khai:
 RLS giai doan Sprint 2.2:
 
 - Teacher (owner cua course) doc/tao/cap nhat metadata `materials` thuoc hoc phan minh.
-- Admin doc va quan ly tat ca materials qua JWT claim `app_metadata.role = 'admin'`.
+- Moderator duyet tai nguyen cua giang vien vao Thu vien dung chung va co the an hoac xoa truc tiep tai nguyen dung chung theo pham vi van hanh.
+- Admin doc va quan ly tat ca materials qua JWT claim `app_metadata.role = 'admin'`, nhung luong UI van hanh Thu vien cua Admin chi tap trung vao danh muc va governance he thong.
 - Student doc duoc materials `published` khi helper membership xac nhan co `class_members.status = active` trong mot `classes.status = active` cua course.
 - Storage objects trong bucket `course-materials` cho phep owner thao tac tren object cua chinh minh; admin co policy toan cuc.
 - Signed URL viewer hien duoc tao bang user-scoped server client sau khi service qua kiem tra quyen truy cap.
 - Migration `202606050003_library_categories_and_tags.sql` bo sung `category_id` va `tags` de loc/tim tai nguyen trong Thu vien.
-- Migration `202606070001_personal_library_upload_review.sql` cho phép `course_id` nullable, bổ sung `review_status/reviewed_by/reviewed_at/review_note`: bỏ trống học phần thì lưu thư viện cá nhân; chọn học phần thì chờ Mod/Admin duyệt vào Thư viện dùng chung.
+- Migration `202606070001_personal_library_upload_review.sql` cho phép `course_id` nullable, bổ sung `review_status/reviewed_by/reviewed_at/review_note`: bỏ trống học phần thì lưu thư viện cá nhân; chọn học phần từ giảng viên thì chờ Mod duyệt vào Thư viện dùng chung.
 
 ---
 
@@ -734,7 +787,7 @@ Trang thai trien khai:
 
 ## 11A. Bảng `course_assessment_results`
 
-Kho ket qua tong hop theo hoc phan, mirror tu `submissions`.
+Bang mirror va publish cho `Kết quả đánh giá học phần`, duoc nap tu `submissions`.
 
 | Cột | Kiểu | Bắt buộc | Ghi chú |
 |---|---|---|---|
@@ -745,6 +798,14 @@ Kho ket qua tong hop theo hoc phan, mirror tu `submissions`.
 | `submission_id` | uuid | Có | FK `submissions.id`, unique |
 | `student_id` | uuid | Có | FK `profiles.id` |
 | `student_identifier` | text | Có | Dinh danh mirror |
+| `student_code_snapshot` | text | Không | Snapshot ma sinh vien dung cho bang tong hop hoc phan |
+| `student_full_name_snapshot` | text | Không | Snapshot ho ten sinh vien |
+| `academic_year_snapshot` | text | Không | Snapshot nam hoc cua lop gui ket qua |
+| `class_code_snapshot` | text | Không | Snapshot ma lop |
+| `class_title_snapshot` | text | Không | Snapshot ten lop |
+| `assessment_component_type` | text | Không | Snapshot thanh phan danh gia cua assessment |
+| `assessment_clo_codes` | text[] | Có | Danh sach CLO snapshot de render cot dong cho bang tong hop |
+| `clo_scores` | jsonb | Có | Diem theo CLO sau khi import/submit, mac dinh `{}` |
 | `attempt_number` | int | Có | Lan nop |
 | `raw_score` | numeric | Không | Diem tho |
 | `max_score` | numeric | Không | Diem toi da |
@@ -752,15 +813,19 @@ Kho ket qua tong hop theo hoc phan, mirror tu `submissions`.
 | `status` | text | Có | `submitted`, `late`, `missing`, `ignored` |
 | `source` | text | Có | `manual`, `internal`, `csv_import`, `google_webhook`, `microsoft_webhook`, `lifecycle` |
 | `submitted_at` | timestamptz | Không | Thoi diem nop |
+| `published_at` | timestamptz | Không | Thoi diem giang vien bam `NỘP KẾT QUẢ` de dua vao bang tong hop hoc phan |
+| `published_by` | uuid | Không | FK `profiles.id`, actor da nap ket qua len hoc phan |
 | `created_at` | timestamptz | Có | Default now |
 | `updated_at` | timestamptz | Có | Auto update |
 
 Quy tac:
 
-- Moi submission hop le phai duoc mirror sang day de tong hop ket qua theo hoc phan.
+- Moi submission hop le co the duoc mirror sang day de chuan bi cho tong hop ket qua theo hoc phan.
 - Submission noi bo sau khi sinh vien bam nop bai cung duoc mirror vao day tuong tu luong import/webhook.
 - Ban ghi tong hop sinh tu `assessment-result-lifecycle-service` co the dung `source = 'lifecycle'` de bieu thi cac truong hop roster chua nop bai sau deadline.
 - `submission_id` la khoa dong bo chinh; service import/webhook phai upsert vao bang nay cung luc voi `submissions`.
+- Bang `Kết quả đánh giá học phần` chi doc cac dong co `published_at` khac null; neu giang vien chua bam `NỘP KẾT QUẢ` thi bang tong hop cap hoc phan chua hien dong du lieu do.
+- Neu assessment khong gan CLO thi `assessment_clo_codes = []` va bang tong hop chi hien cot diem tong; neu co CLO thi hien them cac cot CLO tu `clo_scores`.
 
 ---
 
@@ -826,7 +891,7 @@ Trang thai trien khai:
 
 - Da duoc tao qua migration `202606050003_library_categories_and_tags.sql`.
 - Giang vien doc danh muc active de gan tai nguyen khi upload.
-- Mod/Admin duoc tao, sua va luu tru danh muc; khong hard-delete de tranh mat tham chieu tren tai nguyen cu.
+- Admin duoc tao, sua va luu tru danh muc; Moderator chi su dung danh muc trong cac luong upload/duyet, khong quan ly danh muc.
 
 ---
 
@@ -868,11 +933,11 @@ Trang thai trien khai:
 
 - Da duoc tao qua migration `202606040001_library_simulation_uploads.sql`.
 - Bucket private `simulation-packages` chi nhan `text/html` trong V1.
-- Uploaders doc upload cua minh; Mod/Admin doc/duyet cac ban ghi legacy neu con `pending_review`.
-- Giảng viên/Mod/Admin co the gan upload approved vao hoc phan de tao simulation published; sinh vien mo file qua signed URL sau khi simulation duoc link vao lop.
-- De xuat tich hop native dung `native_integration_status`; Mod/Admin co quyen duyet de dua vao backlog chuyen thanh widget chinh thuc.
+- Uploaders doc upload cua minh; Moderator duyet cac ban ghi `pending_review`; Admin doc toan cuc va xu ly thao tac quan tri.
+- Giang vien de xuat hoc phan muc tieu; Moderator co the gan upload approved vao hoc phan de tao simulation published; sinh vien mo file qua signed URL sau khi simulation duoc link vao lop.
+- De xuat tich hop native dung `native_integration_status`; Admin quyet dinh chap nhan/tu choi de dua vao backlog chuyen thanh widget chinh thuc.
 - Migration `202606050003_library_categories_and_tags.sql` bo sung `category_id` va `tags`.
-- Migration `202606070001_personal_library_upload_review.sql` bo sung `requested_course_id`; upload có học phần của giảng viên chờ duyệt, khi approved hệ thống có thể tự gắn upload vào học phần được yêu cầu.
+- Migration `202606070001_personal_library_upload_review.sql` bo sung `requested_course_id`; upload co hoc phan cua giang vien cho Mod duyet, khi approved he thong co the tu gan upload vao hoc phan duoc yeu cau.
 
 ---
 
@@ -953,7 +1018,8 @@ Trang thai trien khai:
 
 - Da duoc tao qua migration `202606040003_library_change_requests.sql`; action `delete` duoc bo sung trong migration `202606040004_library_delete_requests.sql`.
 - Requester doc yeu cau cua minh; Mod/Admin doc yeu cau.
-- Mod/Admin duyet `archive`; chi Admin duyet `delete`.
+- Luong nay chu yeu phuc vu teacher request va audit trail; Moderator van co the an hoac xoa truc tiep tai nguyen dung chung trong luong van hanh hien hanh.
+- Neu di qua request thi Mod/Admin duyet `archive`; chi Admin duyet `delete`.
 - Khi duyet approved `archive`, service doi tai nguyen dich sang `archived`; khi duyet approved `delete`, service xoa metadata tai nguyen theo quyen Admin.
 
 ## 13.0. Ham RPC quan tri truy cap sinh vien
@@ -1047,7 +1113,8 @@ Trang thai trien khai:
 
 ### 15.2. Courses
 
-- Teacher xem/sửa course do mình sở hữu.
+- Moderator xem/sửa course do mình quản lý trực tiếp.
+- Teacher chỉ đọc course gắn với lớp mình phụ trách hoặc được cấp scope phù hợp; teacher không sửa metadata học phần.
 - Student xem course nếu có membership active trong lớp thuộc course đó.
 - Admin xem tất cả.
 
@@ -1090,7 +1157,7 @@ create table public.profiles (
   full_name text not null,
   role text not null check (role in ('admin', 'moderator', 'teacher', 'student')),
   student_code text unique,
-  teacher_code text unique,
+  role_code text unique,
   status text not null default 'active' check (status in ('active', 'inactive', 'archived')),
   access_status text not null default 'pending_approval' check (access_status in ('pending_approval', 'active', 'suspended', 'expired')),
   access_expires_at timestamptz,

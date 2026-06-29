@@ -25,11 +25,12 @@ export async function approveStudentAccessFromReviewAction(formData: FormData): 
 
   const studentId = String(formData.get("studentId") ?? "").trim();
   const expiresAt = String(formData.get("expiresAt") ?? "").trim() || undefined;
+  const actorRole = profileResult.data.role as "admin" | "moderator";
 
   const result = await approveStudentAccessCommand({
     studentId,
     actorId: profileResult.data.id,
-    actorRole: profileResult.data.role,
+    actorRole,
     expiresAt,
   });
 
@@ -50,11 +51,12 @@ export async function renewStudentAccessFromReviewAction(formData: FormData): Pr
 
   const studentId = String(formData.get("studentId") ?? "").trim();
   const expiresAt = String(formData.get("expiresAt") ?? "").trim();
+  const actorRole = profileResult.data.role as "admin" | "moderator";
 
   const result = await renewStudentAccessCommand({
     studentId,
     actorId: profileResult.data.id,
-    actorRole: profileResult.data.role,
+    actorRole,
     expiresAt,
   });
 
@@ -108,6 +110,7 @@ export async function grantScopeAction(formData: FormData): Promise<void> {
   const actorId = String(formData.get("targetActorId") ?? "").trim();
   const scopeType = String(formData.get("scopeType") ?? "").trim();
   const scopeId = String(formData.get("scopeId") ?? "").trim();
+  const actorRole = profileResult.data.role as "admin";
 
   if (!actorId || !scopeType) {
     redirectWithFlash("error", "Thiếu dữ liệu cấp phạm vi quyền.");
@@ -121,7 +124,7 @@ export async function grantScopeAction(formData: FormData): Promise<void> {
 
   const result = await grantScopeCommand({
     actorId: profileResult.data.id,
-    actorRole: profileResult.data.role,
+    actorRole,
     targetActorId: actorId,
     scopeType,
     scopeId,
@@ -144,10 +147,11 @@ export async function revokeScopeAction(formData: FormData): Promise<void> {
   }
 
   const scopeId = String(formData.get("scopeId") ?? "").trim();
+  const actorRole = profileResult.data.role as "admin";
 
   const result = await revokeScopeCommand({
     actorId: profileResult.data.id,
-    actorRole: profileResult.data.role,
+    actorRole,
     scopeId,
   });
 

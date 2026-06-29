@@ -9,6 +9,7 @@ export const createClassSchema = z.object({
   semester: z.string().trim().max(100).optional(),
   academicYear: z.string().trim().max(100).optional(),
   status: z.enum(["draft", "active", "archived"]).default("active"),
+  isOpenForEnrollment: z.boolean().default(false),
 });
 
 export const addStudentsToClassSchema = z.object({

@@ -266,7 +266,7 @@ export async function acceptNativeSimulationIntegrationAction(
   _prevState: LibraryActionState,
   formData: FormData,
 ): Promise<LibraryActionState> {
-  const profileResult = await requireRole(["admin"]);
+  const profileResult = await requireRole(["moderator", "admin"]);
 
   if (!profileResult.ok) {
     return { status: "error", message: profileResult.error.message };
@@ -363,7 +363,7 @@ export async function applyAdminLibraryResourceActionForm(
 
   return {
     status: "success",
-    message: `Admin đã ${action === "delete" ? "xóa" : "ẩn"} tài nguyên trực tiếp.`,
+    message: `${profileResult.data.role === "moderator" ? "GIÁM SÁT VIÊN" : "QUẢN TRỊ VIÊN"} đã ${action === "delete" ? "xóa" : "ẩn"} tài nguyên trực tiếp.`,
   };
 }
 

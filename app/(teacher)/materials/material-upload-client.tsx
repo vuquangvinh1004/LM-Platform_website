@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 
 import { useRefreshOnSuccess } from "@/lib/hooks/use-refresh-on-success";
+import { getUserRolePresentation } from "@/lib/presentation/user-role";
 import type { UserRole } from "@/lib/types/auth";
 import type { CourseSummary } from "@/lib/types/course";
 import type { LibraryCategoryItem } from "@/lib/types/library";
@@ -21,6 +22,9 @@ export function MaterialUploadClient({ actorRole, categories, courses }: Materia
   const [uploadStatus, setUploadStatus] = useState<"idle" | "success" | "error">("idle");
   const [refreshNonce, setRefreshNonce] = useState(0);
   const isStaffUploader = actorRole === "moderator" || actorRole === "admin";
+  const isModerator = actorRole === "moderator";
+  const moderatorRole = getUserRolePresentation("moderator");
+  const adminRole = getUserRolePresentation("admin");
 
   useRefreshOnSuccess({ status: uploadStatus, nonce: refreshNonce });
 
@@ -77,7 +81,9 @@ export function MaterialUploadClient({ actorRole, categories, courses }: Materia
       <h2 className="text-lg font-semibold text-slate-900">Tải tài liệu</h2>
       <p className="mt-1 text-sm text-slate-600">
         {isStaffUploader
-          ? "Tài nguyên do Mod/Admin tải lên được đưa thẳng vào Thư viện. Chọn học phần cụ thể hoặc Khác nếu tài nguyên không thuộc học phần nào."
+          ? actorRole === "moderator"
+            ? <><span className={moderatorRole.emphasisClassName}>{moderatorRole.label}</span> tải tài nguyên trực tiếp vào Thư viện và có thể chọn <span className={moderatorRole.emphasisClassName}>TÀI LIỆU DÙNG CHUNG</span> hoặc một học phần mình đang quản lý.</>
+            : <><span className={adminRole.emphasisClassName}>{adminRole.label}</span> tải tài nguyên trực tiếp vào Thư viện và cần chọn đúng học phần.</>
           : "Tệp được lưu trong thư viện cá nhân của bạn; nếu chọn học phần, tài liệu sẽ được gửi duyệt để đưa vào Thư viện dùng chung."}
       </p>
 
@@ -92,8 +98,7 @@ export function MaterialUploadClient({ actorRole, categories, courses }: Materia
           >
             {isStaffUploader ? (
               <>
-                <option value="">Chọn học phần hoặc Khác</option>
-                <option value="__other">Khác</option>
+                <option value="__other">Tài liệu dùng chung</option>
               </>
             ) : (
               <option value="">Không chọn - lưu vào thư viện cá nhân</option>
@@ -106,7 +111,9 @@ export function MaterialUploadClient({ actorRole, categories, courses }: Materia
           </select>
           <span className="mt-1 block text-xs text-slate-500">
             {isStaffUploader
-              ? "Mod/Admin cần chọn học phần hoặc Khác; tài nguyên được duyệt sẵn khi tải lên."
+              ? actorRole === "moderator"
+                ? <><span className={moderatorRole.emphasisClassName}>{moderatorRole.label}</span> có thể chọn <span className={moderatorRole.emphasisClassName}>TÀI LIỆU DÙNG CHUNG</span> hoặc một học phần cụ thể do mình quản lý; tài nguyên được duyệt sẵn khi tải lên.</>
+                : <><span className={adminRole.emphasisClassName}>{adminRole.label}</span> cần chọn một học phần cụ thể; tài nguyên được duyệt sẵn khi tải lên.</>
               : "Bỏ trống để lưu riêng tư. Chọn học phần để gửi yêu cầu duyệt vào Thư viện dùng chung."}
           </span>
         </label>
@@ -122,11 +129,6 @@ export function MaterialUploadClient({ actorRole, categories, courses }: Materia
         </label>
 
         <label className="text-sm text-slate-700">
-          <span className="font-medium">Nhãn mục</span>
-          <input className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" data-testid="material-section-label" name="sectionLabel" placeholder="Ví dụ: Tuần 1" />
-        </label>
-
-        <label className="text-sm text-slate-700">
           <span className="font-medium">Danh mục</span>
           <select className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="categoryId">
             <option value="">Chọn danh mục</option>
@@ -138,7 +140,14 @@ export function MaterialUploadClient({ actorRole, categories, courses }: Materia
           </select>
         </label>
 
-        <label className="text-sm text-slate-700 md:col-span-2">
+        {!isModerator ? (
+        <label className="text-sm text-slate-700">
+          <span className="font-medium">Nhãn mục</span>
+          <input className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" data-testid="material-section-label" name="sectionLabel" placeholder="Ví dụ: Tuần 1" />
+        </label>
+        ) : null}
+
+        <label className={`text-sm text-slate-700 ${isModerator ? "" : "md:col-span-2"}`}>
           <span className="font-medium">Tags</span>
           <input
             className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
@@ -174,7 +183,7 @@ export function MaterialUploadClient({ actorRole, categories, courses }: Materia
 
         <div className="flex flex-wrap items-end justify-between gap-3 md:col-span-2">
           <p className="max-w-3xl text-xs text-slate-500">
-            Định dạng hỗ trợ: PDF, PPT/PPTX, DOC/DOCX, XLS/XLSX, ZIP. Giới hạn cá nhân mặc định {Math.floor(materialUploadConstraints.maxFileSizeBytes / 1024 / 1024)} MB; Admin có thể điều chỉnh mức này ở cấu hình hệ thống.
+            Định dạng hỗ trợ: PDF, PPT/PPTX, DOC/DOCX, XLS/XLSX, ZIP. Giới hạn mặc định {Math.floor(materialUploadConstraints.maxFileSizeBytes / 1024 / 1024)} MB.
           </p>
           <button
             className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"

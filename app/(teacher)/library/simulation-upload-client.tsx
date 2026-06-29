@@ -11,6 +11,7 @@ import {
   uploadSimulationPackageAction,
 } from "@/app/(teacher)/library/actions";
 import { initialLibraryActionState } from "@/app/(teacher)/library/library-action-state";
+import { getUserRolePresentation } from "@/lib/presentation/user-role";
 import type { UserRole } from "@/lib/types/auth";
 import type { CourseSummary } from "@/lib/types/course";
 import type { LibraryCategoryItem, LibrarySimulationUploadItem } from "@/lib/types/library";
@@ -77,6 +78,9 @@ export function SimulationUploadClient({ actorRole, categories, courses, uploads
   const canRequestNative = actorRole === "moderator";
   const canLinkToCourse = actorRole === "moderator";
   const isStaffUploader = actorRole === "moderator" || actorRole === "admin";
+  const isModerator = actorRole === "moderator";
+  const moderatorRole = getUserRolePresentation("moderator");
+  const adminRole = getUserRolePresentation("admin");
 
   return (
     <section className="mt-6 rounded-lg border border-slate-200 bg-white p-5">
@@ -86,8 +90,8 @@ export function SimulationUploadClient({ actorRole, categories, courses, uploads
           <p className="mt-1 text-sm text-slate-600">
             {isStaffUploader
               ? actorRole === "moderator"
-                ? "Mô phỏng do Mod tải lên được đưa thẳng vào Thư viện dùng chung. Mod chọn học phần cụ thể hoặc Khác nếu mô phỏng không thuộc học phần nào."
-                : "Mô phỏng do Admin tải lên được đưa thẳng vào Thư viện dùng chung. Chọn học phần cụ thể hoặc Khác nếu mô phỏng không thuộc học phần nào."
+                ? <><span className={moderatorRole.emphasisClassName}>{moderatorRole.label}</span> tải mô phỏng trực tiếp vào Thư viện dùng chung và có thể chọn <span className={moderatorRole.emphasisClassName}>TÀI LIỆU DÙNG CHUNG</span> hoặc một học phần mình đang quản lý.</>
+                : <><span className={adminRole.emphasisClassName}>{adminRole.label}</span> tải mô phỏng trực tiếp vào Thư viện dùng chung và cần chọn đúng học phần.</>
               : "Bỏ trống học phần để lưu mô phỏng vào thư viện cá nhân; chọn học phần để gửi duyệt vào Thư viện dùng chung."}
           </p>
         </div>
@@ -100,8 +104,7 @@ export function SimulationUploadClient({ actorRole, categories, courses, uploads
           <select className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="courseId" required={isStaffUploader}>
             {isStaffUploader ? (
               <>
-                <option value="">Chọn học phần hoặc Khác</option>
-                <option value="__other">Khác</option>
+                <option value="__other">Tài liệu dùng chung</option>
               </>
             ) : (
               <option value="">Không chọn - lưu vào thư viện cá nhân</option>
@@ -114,7 +117,9 @@ export function SimulationUploadClient({ actorRole, categories, courses, uploads
           </select>
           <span className="mt-1 block text-xs text-slate-500">
             {isStaffUploader
-              ? "Mod/Admin cần chọn học phần hoặc Khác; mô phỏng được duyệt sẵn khi tải lên."
+              ? actorRole === "moderator"
+                ? <><span className={moderatorRole.emphasisClassName}>{moderatorRole.label}</span> có thể chọn <span className={moderatorRole.emphasisClassName}>TÀI LIỆU DÙNG CHUNG</span> hoặc một học phần cụ thể do mình quản lý; mô phỏng được duyệt sẵn khi tải lên.</>
+                : <><span className={adminRole.emphasisClassName}>{adminRole.label}</span> cần chọn một học phần cụ thể; mô phỏng được duyệt sẵn khi tải lên.</>
               : "Chọn học phần để gửi yêu cầu duyệt vào Thư viện dùng chung của học phần."}
           </span>
         </label>
@@ -206,6 +211,7 @@ export function SimulationUploadClient({ actorRole, categories, courses, uploads
         </p>
       ) : null}
 
+      {!isModerator ? (
       <div className="mt-6">
         <h3 className="text-base font-semibold text-slate-900">Mô phỏng đã tải lên</h3>
         {uploads.length === 0 ? (
@@ -360,6 +366,7 @@ export function SimulationUploadClient({ actorRole, categories, courses, uploads
           </div>
         )}
       </div>
+      ) : null}
 
       {[reviewState, linkState, nativeState, nativeAcceptState, nativeReviewState].map((state, index) =>
         state.message ? (

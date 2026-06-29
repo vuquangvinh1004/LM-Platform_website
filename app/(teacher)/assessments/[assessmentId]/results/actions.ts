@@ -2,18 +2,22 @@
 
 import type {
   AssessmentGradingActionState,
+  AssessmentResultsLockActionState,
   AssessmentResultsImportActionState,
+  AssessmentResultsSubmitActionState,
 } from "@/app/(teacher)/assessments/[assessmentId]/results/assessment-results-action-state";
-import { getAssessmentResultsPaths, revalidatePaths } from "@/lib/navigation/route-invalidation";
+import { getAssessmentResultsPaths, getCourseAssessmentPublicationPaths, revalidatePaths } from "@/lib/navigation/route-invalidation";
+import { lockAssessmentResults, unlockAssessmentResults } from "@/lib/services/assessment-service";
 import { requireRole } from "@/lib/services/auth-service";
 import { finalizeAssessmentSubmission } from "@/lib/services/assessment-runtime-service";
+import { publishAssessmentResultsToCourse } from "@/lib/services/course-assessment-publication-service";
 import { importSubmissionsFromSpreadsheet } from "@/lib/services/submission-service";
 
 export async function gradeEssayAnswerAction(
   _prevState: AssessmentGradingActionState,
   formData: FormData,
 ): Promise<AssessmentGradingActionState> {
-  const profileResult = await requireRole(["teacher", "moderator", "admin"]);
+  const profileResult = await requireRole(["teacher", "admin"]);
 
   if (!profileResult.ok) {
     return {
@@ -62,7 +66,7 @@ export async function importAssessmentResultsAction(
   _prevState: AssessmentResultsImportActionState,
   formData: FormData,
 ): Promise<AssessmentResultsImportActionState> {
-  const profileResult = await requireRole(["teacher", "moderator", "admin"]);
+  const profileResult = await requireRole(["teacher", "admin"]);
 
   if (!profileResult.ok) {
     return {
@@ -117,6 +121,152 @@ export async function importAssessmentResultsAction(
   return {
     status: importResult.data.errorRows > 0 ? "error" : "success",
     message: `${summary}${errorSuffix}${firstError}`,
+    nonce: Date.now(),
+  };
+}
+
+export async function lockAssessmentResultsAction(
+  _prevState: AssessmentResultsLockActionState,
+  formData: FormData,
+): Promise<AssessmentResultsLockActionState> {
+  const profileResult = await requireRole(["teacher", "admin"]);
+
+  if (!profileResult.ok) {
+    return {
+      status: "error",
+      message: profileResult.error.message,
+      nonce: Date.now(),
+    };
+  }
+
+  const assessmentId = String(formData.get("assessmentId") ?? "").trim();
+
+  if (!assessmentId) {
+    return {
+      status: "error",
+      message: "Thiếu mã bài kiểm tra để khóa kết quả.",
+      nonce: Date.now(),
+    };
+  }
+
+  const lockResult = await lockAssessmentResults({
+    assessmentId,
+    actorId: profileResult.data.id,
+    actorRole: profileResult.data.role,
+  });
+
+  if (!lockResult.ok) {
+    return {
+      status: "error",
+      message: lockResult.error.message,
+      nonce: Date.now(),
+    };
+  }
+
+  revalidatePaths(getAssessmentResultsPaths(assessmentId));
+
+  return {
+    status: "success",
+    message: "Đã khóa kết quả bài kiểm tra. Muốn cập nhật điểm, hãy chọn MỞ KẾT QUẢ trước.",
+    nonce: Date.now(),
+  };
+}
+
+export async function unlockAssessmentResultsAction(
+  _prevState: AssessmentResultsLockActionState,
+  formData: FormData,
+): Promise<AssessmentResultsLockActionState> {
+  const profileResult = await requireRole(["teacher", "admin"]);
+
+  if (!profileResult.ok) {
+    return {
+      status: "error",
+      message: profileResult.error.message,
+      nonce: Date.now(),
+    };
+  }
+
+  const assessmentId = String(formData.get("assessmentId") ?? "").trim();
+
+  if (!assessmentId) {
+    return {
+      status: "error",
+      message: "Thiếu mã bài kiểm tra để mở lại kết quả.",
+      nonce: Date.now(),
+    };
+  }
+
+  const unlockResult = await unlockAssessmentResults({
+    assessmentId,
+    actorId: profileResult.data.id,
+    actorRole: profileResult.data.role,
+  });
+
+  if (!unlockResult.ok) {
+    return {
+      status: "error",
+      message: unlockResult.error.message,
+      nonce: Date.now(),
+    };
+  }
+
+  revalidatePaths(getAssessmentResultsPaths(assessmentId));
+
+  return {
+    status: "success",
+    message: "Đã mở lại kết quả bài kiểm tra. Bạn có thể tiếp tục cập nhật điểm.",
+    nonce: Date.now(),
+  };
+}
+
+export async function submitAssessmentResultsToCourseAction(
+  _prevState: AssessmentResultsSubmitActionState,
+  formData: FormData,
+): Promise<AssessmentResultsSubmitActionState> {
+  const profileResult = await requireRole(["teacher", "admin"]);
+
+  if (!profileResult.ok) {
+    return {
+      status: "error",
+      message: profileResult.error.message,
+      nonce: Date.now(),
+    };
+  }
+
+  const assessmentId = String(formData.get("assessmentId") ?? "").trim();
+
+  if (!assessmentId) {
+    return {
+      status: "error",
+      message: "Thiếu mã bài kiểm tra để nộp kết quả.",
+      nonce: Date.now(),
+    };
+  }
+
+  const publishResult = await publishAssessmentResultsToCourse({
+    assessmentId,
+    actorId: profileResult.data.id,
+    actorRole: profileResult.data.role,
+  });
+
+  if (!publishResult.ok) {
+    return {
+      status: "error",
+      message: publishResult.error.message,
+      nonce: Date.now(),
+    };
+  }
+
+  revalidatePaths([
+    ...getAssessmentResultsPaths(assessmentId),
+    ...getCourseAssessmentPublicationPaths(publishResult.data.courseId),
+  ]);
+
+  return {
+    status: "success",
+    message: publishResult.data.publishedRows > 0
+      ? `Đã nộp ${publishResult.data.publishedRows} dòng kết quả lên trang Kết quả đánh giá học phần.`
+      : "Chưa có dòng kết quả nào để nộp lên học phần.",
     nonce: Date.now(),
   };
 }

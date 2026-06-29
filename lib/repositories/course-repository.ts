@@ -70,8 +70,9 @@ export type CourseDeletionBlockers = {
 
 export type AssignCourseModeratorRepositoryInput = {
   courseId: string;
-  moderatorId: string;
+  moderatorId: string | null;
   grantedBy: string;
+  ownerId: string;
 };
 
 export type AssignCourseTeachersRepositoryInput = {
@@ -152,6 +153,10 @@ type PermissionScopeTeacherRow = {
   }[] | null;
 };
 
+type PermissionScopeCourseIdRow = {
+  scope_id: string | null;
+};
+
 const COURSE_SELECT =
   "id,owner_id,owner_profile:profiles!courses_owner_id_fkey(full_name,role),code,title,description,visibility,status,credits,knowledge_block,course_type,clo_items,assessment_components,created_at,updated_at";
 
@@ -181,6 +186,10 @@ const DEFAULT_SIMULATION_WIDGETS = [
 
 function mapCourseRow(row: CourseRow): CourseSummary {
   const ownerProfile = Array.isArray(row.owner_profile) ? row.owner_profile[0] ?? null : row.owner_profile ?? null;
+  const assessmentComponents = (row.assessment_components ?? []).map((component) => ({
+    ...component,
+    cloCodes: component.cloCodes ?? [],
+  }));
 
   return {
     id: row.id,
@@ -196,7 +205,7 @@ function mapCourseRow(row: CourseRow): CourseSummary {
     knowledgeBlock: row.knowledge_block,
     courseType: row.course_type,
     cloItems: row.clo_items ?? [],
-    assessmentComponents: row.assessment_components ?? [],
+    assessmentComponents,
     assignedTeachers: [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -204,6 +213,11 @@ function mapCourseRow(row: CourseRow): CourseSummary {
 }
 
 function mapCourseChangeRequestRow(row: CourseChangeRequestRow): CourseChangeRequest {
+  const requestedAssessmentComponents = (row.requested_assessment_components ?? []).map((component) => ({
+    ...component,
+    cloCodes: component.cloCodes ?? [],
+  }));
+
   return {
     id: row.id,
     action: row.action,
@@ -219,7 +233,7 @@ function mapCourseChangeRequestRow(row: CourseChangeRequestRow): CourseChangeReq
     requestedKnowledgeBlock: row.requested_knowledge_block,
     requestedCourseType: row.requested_course_type,
     requestedCloItems: row.requested_clo_items ?? [],
-    requestedAssessmentComponents: row.requested_assessment_components ?? [],
+    requestedAssessmentComponents,
     assignedModeratorId: row.assigned_moderator_id,
     status: row.status,
     reason: row.reason,
@@ -324,6 +338,34 @@ export async function listCoursesForUserRepository(
   if (input.query) {
     const keyword = `%${input.query}%`;
     query = query.or(`code.ilike.${keyword},title.ilike.${keyword}`);
+  }
+
+  if (input.role === "moderator") {
+    query = query.eq("owner_id", input.userId);
+  }
+
+  if (input.role === "teacher") {
+    const { data: scopeRows, error: scopeError } = await supabase
+      .from("permission_scopes")
+      .select("scope_id")
+      .eq("actor_id", input.userId)
+      .eq("scope_type", "course")
+      .eq("status", "active");
+
+    if (scopeError) {
+      throw scopeError;
+    }
+
+    const visibleCourseIds = [...new Set(((scopeRows ?? []) as PermissionScopeCourseIdRow[]).map((row) => row.scope_id).filter(Boolean))];
+
+    if (visibleCourseIds.length === 0) {
+      return {
+        items: [],
+        totalItems: 0,
+      };
+    }
+
+    query = query.in("id", visibleCourseIds);
   }
 
   const { data, error, count } = await query;
@@ -534,7 +576,7 @@ export async function assignCourseModeratorRepository(input: AssignCourseModerat
   const { data, error } = await supabase
     .from("courses")
     .update({
-      owner_id: input.moderatorId,
+      owner_id: input.moderatorId ?? input.ownerId,
     })
     .eq("id", input.courseId)
     .select(COURSE_SELECT)
@@ -581,6 +623,11 @@ export async function assignCourseModeratorRepository(input: AssignCourseModerat
 
   if (revokeError) {
     throw revokeError;
+  }
+
+  if (!input.moderatorId) {
+    const [courseWithAssignments] = await attachAssignedTeachersToCourses([mapCourseRow(data as CourseRow)]);
+    return courseWithAssignments;
   }
 
   const { data: existingScope, error: existingScopeError } = await supabase

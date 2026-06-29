@@ -9,9 +9,17 @@ import { useRefreshOnSuccess } from "@/lib/hooks/use-refresh-on-success";
 
 type AssessmentResultsImportClientProps = {
   assessmentId: string;
+  assessmentCloCodes: string[];
+  disabled?: boolean;
+  disabledMessage?: string;
 };
 
-export function AssessmentResultsImportClient({ assessmentId }: AssessmentResultsImportClientProps) {
+export function AssessmentResultsImportClient({
+  assessmentId,
+  assessmentCloCodes,
+  disabled = false,
+  disabledMessage,
+}: AssessmentResultsImportClientProps) {
   const [state, action, isPending] = useActionState(
     importAssessmentResultsAction,
     initialAssessmentResultsImportActionState,
@@ -57,6 +65,7 @@ export function AssessmentResultsImportClient({ assessmentId }: AssessmentResult
         <input
           accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           className="sr-only"
+          disabled={disabled}
           id={`assessment-results-import-${assessmentId}`}
           name="resultsFile"
           onChange={(event) => {
@@ -68,14 +77,19 @@ export function AssessmentResultsImportClient({ assessmentId }: AssessmentResult
         />
       </div>
       <p className="mt-2 text-xs text-slate-500">
-        Thứ tự cột file import: Mã sinh viên, Họ tên sinh viên, Email, Điểm, Nộp lúc, Nguồn, Ghi chú. Hệ thống dùng Mã sinh viên làm khóa đối chiếu cố định khi import.
+        Thứ tự cột file import: Mã sinh viên, Họ tên sinh viên, Email, Điểm
+        {assessmentCloCodes.length > 0 ? `, ${assessmentCloCodes.join(", ")}` : ""}
+        , Nộp lúc, Nguồn, Ghi chú. Hệ thống dùng Mã sinh viên làm khóa đối chiếu cố định khi import.
       </p>
       {state.message ? (
         <p className={state.status === "error" ? "mt-2 text-sm text-red-600" : "mt-2 text-sm text-emerald-700"}>
           {state.message}
         </p>
       ) : null}
-      <button className="mt-3 rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60" disabled={isPending} type="submit">
+      {disabledMessage ? (
+        <p className="mt-2 text-sm text-red-600">{disabledMessage}</p>
+      ) : null}
+      <button className="mt-3 rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60" disabled={isPending || disabled} type="submit">
         {isPending ? "Đang import..." : "Tải kết quả lên"}
       </button>
     </form>

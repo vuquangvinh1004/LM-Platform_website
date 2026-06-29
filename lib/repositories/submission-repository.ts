@@ -14,7 +14,16 @@ type ManageableAssessmentRow = {
   class_id: string;
   course_id: string;
   title: string;
+  assessment_component_type: "diagnostic" | "frequent" | "periodic" | "final" | null;
+  assessment_clo_codes: string[] | null;
+  results_locked_at: string | null;
+  results_published_at: string | null;
 };
+
+type LegacyManageableAssessmentRow = Omit<
+  ManageableAssessmentRow,
+  "assessment_component_type" | "assessment_clo_codes" | "results_locked_at" | "results_published_at"
+>;
 
 type StudentProfileRow = {
   id: string;
@@ -56,6 +65,8 @@ type AssessmentLifecycleAssessmentRow = {
   delivery_mode: "external" | "internal";
   due_at: string | null;
   max_score: number | null;
+  results_locked_at: string | null;
+  results_published_at: string | null;
 };
 
 type AssessmentLifecycleRosterRow = {
@@ -85,6 +96,43 @@ type SubmissionImportRosterRow = {
   }[] | null;
 };
 
+const MANAGEABLE_ASSESSMENT_SELECT = "id,class_id,course_id,title,assessment_component_type,assessment_clo_codes,results_locked_at,results_published_at";
+const LEGACY_MANAGEABLE_ASSESSMENT_SELECT = "id,class_id,course_id,title";
+
+function isMissingAssessmentComponentColumnsError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const errorLike = error as { code?: unknown; message?: unknown; details?: unknown; hint?: unknown };
+  const code = typeof errorLike.code === "string" ? errorLike.code : "";
+  const message = [
+    typeof errorLike.message === "string" ? errorLike.message : "",
+    typeof errorLike.details === "string" ? errorLike.details : "",
+    typeof errorLike.hint === "string" ? errorLike.hint : "",
+  ].join(" ");
+
+  return (code === "42703" || code === "PGRST204")
+    && (message.includes("assessment_component_type") || message.includes("assessment_clo_codes"));
+}
+
+function isMissingAssessmentResultWorkflowColumnsError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const errorLike = error as { code?: unknown; message?: unknown; details?: unknown; hint?: unknown };
+  const code = typeof errorLike.code === "string" ? errorLike.code : "";
+  const message = [
+    typeof errorLike.message === "string" ? errorLike.message : "",
+    typeof errorLike.details === "string" ? errorLike.details : "",
+    typeof errorLike.hint === "string" ? errorLike.hint : "",
+  ].join(" ");
+
+  return (code === "42703" || code === "PGRST204")
+    && (message.includes("results_locked_at") || message.includes("results_published_at"));
+}
+
 function firstProfile(
   profile: AssessmentLifecycleRosterRow["profile"],
 ): { full_name: string; email: string | null; student_code: string | null } | null {
@@ -107,6 +155,12 @@ function mapSubmissionSummary(row: SubmissionSummaryRow, profile?: StudentProfil
     : typeof metadata.importNote === "string"
       ? metadata.importNote
       : undefined;
+  const rawCloScores = metadata.cloScores;
+  const cloScores = typeof rawCloScores === "object" && rawCloScores !== null
+    ? Object.fromEntries(
+        Object.entries(rawCloScores).map(([key, value]) => [key, typeof value === "number" ? value : undefined]),
+      )
+    : {};
 
   return {
     id: row.id,
@@ -126,6 +180,7 @@ function mapSubmissionSummary(row: SubmissionSummaryRow, profile?: StudentProfil
     attemptNumber: row.attempt_number,
     externalResponseId: row.external_response_id ?? undefined,
     note,
+    cloScores,
     createdAt: row.created_at,
   };
 }
@@ -135,28 +190,65 @@ function mapSubmissionSummary(row: SubmissionSummaryRow, profile?: StudentProfil
  */
 export async function findManageableAssessmentRepository(input: {
   assessmentId: string;
-}): Promise<{ id: string; classId: string; courseId: string; title: string } | null> {
+}): Promise<{
+  id: string;
+  classId: string;
+  courseId: string;
+  title: string;
+  assessmentComponentType?: "diagnostic" | "frequent" | "periodic" | "final";
+  assessmentCloCodes?: string[];
+  resultsLockedAt?: string;
+  resultsPublishedAt?: string;
+} | null> {
   const supabase = await createServerSupabaseClient();
 
   const { data, error } = await supabase
     .from("assessments")
-    .select("id,class_id,course_id,title")
+    .select(MANAGEABLE_ASSESSMENT_SELECT)
     .eq("id", input.assessmentId)
     .maybeSingle<ManageableAssessmentRow>();
 
-  if (error) {
+  if (error && !isMissingAssessmentComponentColumnsError(error) && !isMissingAssessmentResultWorkflowColumnsError(error)) {
     throw error;
   }
 
-  if (!data) {
+  let assessmentRow: ManageableAssessmentRow | LegacyManageableAssessmentRow | null = data ?? null;
+
+  if (error) {
+    const legacyResult = await supabase
+      .from("assessments")
+      .select(LEGACY_MANAGEABLE_ASSESSMENT_SELECT)
+      .eq("id", input.assessmentId)
+      .maybeSingle<LegacyManageableAssessmentRow>();
+
+    if (legacyResult.error) {
+      throw legacyResult.error;
+    }
+
+    assessmentRow = legacyResult.data ?? null;
+  }
+
+  if (!assessmentRow) {
     return null;
   }
 
   return {
-    id: data.id,
-    classId: data.class_id,
-    courseId: data.course_id,
-    title: data.title,
+    id: assessmentRow.id,
+    classId: assessmentRow.class_id,
+    courseId: assessmentRow.course_id,
+    title: assessmentRow.title,
+    assessmentComponentType: "assessment_component_type" in assessmentRow
+      ? assessmentRow.assessment_component_type ?? undefined
+      : undefined,
+    assessmentCloCodes: "assessment_clo_codes" in assessmentRow
+      ? assessmentRow.assessment_clo_codes ?? []
+      : [],
+    resultsLockedAt: "results_locked_at" in assessmentRow
+      ? assessmentRow.results_locked_at ?? undefined
+      : undefined,
+    resultsPublishedAt: "results_published_at" in assessmentRow
+      ? assessmentRow.results_published_at ?? undefined
+      : undefined,
   };
 }
 
@@ -405,14 +497,22 @@ export async function upsertExternalSubmissionServiceRepository(input: {
  */
 export async function findAssessmentByIdServiceRepository(input: {
   assessmentId: string;
-}): Promise<{ id: string; classId: string; courseId: string; title: string } | null> {
+}): Promise<{
+  id: string;
+  classId: string;
+  courseId: string;
+  title: string;
+  deliveryMode: "external" | "internal";
+  resultsLockedAt?: string;
+  resultsPublishedAt?: string;
+} | null> {
   const supabase = createServiceRoleSupabaseClient();
 
   const { data, error } = await supabase
     .from("assessments")
-    .select("id,class_id,course_id,title")
+    .select("id,class_id,course_id,title,delivery_mode,results_locked_at,results_published_at")
     .eq("id", input.assessmentId)
-    .maybeSingle<ManageableAssessmentRow>();
+    .maybeSingle<AssessmentLifecycleAssessmentRow>();
 
   if (error) {
     throw error;
@@ -427,6 +527,9 @@ export async function findAssessmentByIdServiceRepository(input: {
     classId: data.class_id,
     courseId: data.course_id,
     title: data.title,
+    deliveryMode: data.delivery_mode,
+    resultsLockedAt: data.results_locked_at ?? undefined,
+    resultsPublishedAt: data.results_published_at ?? undefined,
   };
 }
 

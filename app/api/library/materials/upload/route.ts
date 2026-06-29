@@ -13,7 +13,7 @@ function resolveCourseIdForUpload(rawCourseId: FormDataEntryValue | null, actorR
   }
 
   if (actorRole !== "teacher" && !courseId) {
-    throw new Error("Mod/Admin cần chọn học phần hoặc Khác khi tải tài nguyên lên Thư viện.");
+    throw new Error("GIÁM SÁT VIÊN/QUẢN TRỊ VIÊN cần chọn một học phần khi tải tài nguyên lên Thư viện.");
   }
 
   return courseId || undefined;
@@ -103,7 +103,7 @@ export async function POST(request: Request) {
     status: "success",
     message:
       registerResult.data.reviewStatus === "pending_review"
-        ? `Tài liệu ${registerResult.data.title} đã được tải lên và đang chờ Mod/Admin duyệt vào Thư viện dùng chung.`
+        ? `Tài liệu ${registerResult.data.title} đã được tải lên và đang chờ GIÁM SÁT VIÊN/QUẢN TRỊ VIÊN duyệt vào Thư viện dùng chung.`
         : profileResult.data.role === "teacher"
           ? `Tài liệu ${registerResult.data.title} đã được tải lên Thư viện cá nhân.`
           : `Tài liệu ${registerResult.data.title} đã được tải thẳng vào Thư viện.`,

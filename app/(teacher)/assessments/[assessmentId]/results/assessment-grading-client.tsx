@@ -10,12 +10,16 @@ type AssessmentGradingClientProps = {
   assessmentId: string;
   attempts: AssessmentAttemptGradingView[];
   definition: InternalAssessmentDefinition;
+  disabled?: boolean;
+  disabledMessage?: string;
 };
 
 export function AssessmentGradingClient({
   assessmentId,
   attempts,
   definition,
+  disabled = false,
+  disabledMessage,
 }: AssessmentGradingClientProps) {
   const [state, action, isPending] = useActionState(gradeEssayAnswerAction, initialAssessmentGradingActionState);
   const questionById = new Map(definition.questions.map((question) => [question.questionBankItemId, question]));
@@ -56,6 +60,9 @@ export function AssessmentGradingClient({
       <p className="mt-2 text-sm text-slate-600">
         Các bài kiểm tra nội bộ có câu tự luận sẽ hiển thị tại đây để giảng viên nhập điểm và nhận xét. Sau khi lưu, hệ thống sẽ tự đồng bộ lại tổng điểm vào bảng kết quả.
       </p>
+      {disabledMessage ? (
+        <p className="mt-2 text-sm text-red-600">{disabledMessage}</p>
+      ) : null}
 
       {state.message ? (
         <p className={state.status === "error" ? "mt-3 text-sm text-red-600" : "mt-3 text-sm text-emerald-700"}>
@@ -133,7 +140,7 @@ export function AssessmentGradingClient({
                       <p>Điểm tự động: {score?.autoScore ?? "-"}</p>
                       <p>Điểm cuối cùng hiện tại: {score?.finalScore ?? "-"}</p>
                     </div>
-                    <button className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60" disabled={isPending} type="submit">
+                    <button className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60" disabled={isPending || disabled} type="submit">
                       {isPending ? "Đang lưu..." : "Lưu điểm tự luận"}
                     </button>
                   </div>

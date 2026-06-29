@@ -203,39 +203,69 @@ async function activateClassMembership(input: {
   }
 }
 
+type ClassEnrollmentModeRow = {
+  id: string;
+  auto_approve_enrollment: boolean;
+};
+
 /**
  * Inserts enrollment requests. Duplicate pending requests are ignored by unique index constraints.
  */
 export async function createEnrollmentRequestsRepository(
   input: CreateEnrollmentRequestsRepositoryInput,
-): Promise<{ created: EnrollmentRequest[]; skipped: EnrollmentRequestCreateItem[] }> {
-  const supabase = await createServerSupabaseClient();
+): Promise<{ created: EnrollmentRequest[]; skipped: EnrollmentRequestCreateItem[]; autoApproved: number }> {
+  const supabase = createServiceRoleSupabaseClient();
   const nowIso = new Date().toISOString();
+  const classIds = [...new Set(input.requests.map((item) => item.classId).filter(Boolean))] as string[];
+  const { data: classRows, error: classError } = classIds.length > 0
+    ? await supabase.from("classes").select("id,auto_approve_enrollment").in("id", classIds)
+    : { data: [], error: null };
 
-  const payload = input.requests.map((item) => ({
-    student_id: input.studentId,
-    course_id: item.courseId,
-    class_id: item.classId ?? null,
-    status: "pending",
-    requested_at: nowIso,
-  }));
-
-  const { data, error } = await supabase
-    .from("enrollment_requests")
-    .insert(payload)
-    .select("id,student_id,course_id,class_id,status,requested_at,reviewed_by,reviewed_at,review_note");
-
-  if (!error) {
-    return {
-      created: (data ?? []).map(mapEnrollmentRow),
-      skipped: [],
-    };
+  if (classError) {
+    throw classError;
   }
 
-  // Skeleton fallback: if insert fails (often due to unique pending request), return all as skipped.
+  const autoApproveByClassId = new Map(((classRows ?? []) as ClassEnrollmentModeRow[]).map((row) => [row.id, row.auto_approve_enrollment]));
+  const created: EnrollmentRequest[] = [];
+  const skipped: EnrollmentRequestCreateItem[] = [];
+  let autoApproved = 0;
+
+  for (const item of input.requests) {
+    const isAutoApproved = item.classId ? autoApproveByClassId.get(item.classId) === true : false;
+    const { data, error } = await supabase
+      .from("enrollment_requests")
+      .insert({
+        student_id: input.studentId,
+        course_id: item.courseId,
+        class_id: item.classId ?? null,
+        status: isAutoApproved ? "approved" : "pending",
+        requested_at: nowIso,
+        reviewed_at: isAutoApproved ? nowIso : null,
+        review_note: isAutoApproved ? "Tự động duyệt theo cấu hình lớp." : null,
+      })
+      .select("id,student_id,course_id,class_id,status,requested_at,reviewed_by,reviewed_at,review_note")
+      .maybeSingle<EnrollmentRequestRow>();
+
+    if (error || !data) {
+      skipped.push(item);
+      continue;
+    }
+
+    if (isAutoApproved && item.classId) {
+      await activateClassMembership({
+        classId: item.classId,
+        studentId: input.studentId,
+      });
+      autoApproved += 1;
+    }
+
+    created.push(mapEnrollmentRow(data));
+  }
+
   return {
-    created: [],
-    skipped: input.requests,
+    created,
+    skipped,
+    autoApproved,
   };
 }
 

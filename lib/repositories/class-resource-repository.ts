@@ -16,7 +16,7 @@ type ClassResourceClassRow = {
 
 type ClassResourceMaterialRow = {
   id: string;
-  course_id: string;
+  course_id: string | null;
   uploaded_by: string;
   category_id: string | null;
   title: string;
@@ -36,7 +36,7 @@ type ClassResourceMaterialRow = {
 
 type ClassResourceSimulationRow = {
   id: string;
-  course_id: string;
+  course_id: string | null;
   category_id: string | null;
   slug: string;
   title: string;
@@ -97,7 +97,7 @@ function toLibrarySimulation(row: ClassResourceSimulationRow): LibrarySimulation
 
   return {
     id: row.id,
-    courseId: row.course_id,
+    courseId: row.course_id ?? "",
     courseCode: course?.code ?? "",
     courseTitle: course?.title ?? "",
     categoryId: row.category_id,
@@ -149,7 +149,7 @@ export async function getClassResourceManagerDataRepository(
       .select(
         "id,course_id,uploaded_by,category_id,title,description,section_label,tags,file_type,file_size,allow_download,status,review_status,review_note,created_at,course:courses(code,title),category:library_categories(id,name)",
       )
-      .eq("course_id", classRow.course_id)
+      .or(`course_id.eq.${classRow.course_id},course_id.is.null`)
       .eq("review_status", "approved")
       .neq("status", "archived")
       .order("created_at", { ascending: false })
@@ -159,7 +159,7 @@ export async function getClassResourceManagerDataRepository(
       .select(
         "id,course_id,category_id,slug,title,description,tags,status,created_at,course:courses(code,title),category:library_categories(id,name)",
       )
-      .eq("course_id", classRow.course_id)
+      .or(`course_id.eq.${classRow.course_id},course_id.is.null`)
       .neq("status", "archived")
       .order("created_at", { ascending: false })
       .returns<ClassResourceSimulationRow[]>(),

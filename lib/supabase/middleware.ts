@@ -47,7 +47,7 @@ export async function updateSession(request: NextRequest) {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id,email,full_name,role,status,access_status,access_expires_at,student_code,teacher_code")
+    .select("id,email,full_name,role,status,access_status,access_expires_at,student_code,role_code")
     .eq("id", user.id)
     .maybeSingle();
 

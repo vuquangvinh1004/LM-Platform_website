@@ -60,7 +60,7 @@ export async function POST(request: Request) {
       status: "success",
       message:
         result.data.reviewStatus === "pending_review"
-          ? `Tài liệu ${result.data.title} đã được tải lên và đang chờ Mod/Admin duyệt vào Thư viện dùng chung.`
+          ? `Tài liệu ${result.data.title} đã được tải lên và đang chờ GIÁM SÁT VIÊN/QUẢN TRỊ VIÊN duyệt vào Thư viện dùng chung.`
           : profileResult.data.role === "teacher"
             ? `Tài liệu ${result.data.title} đã được tải lên Thư viện cá nhân.`
             : `Tài liệu ${result.data.title} đã được tải thẳng vào Thư viện.`,

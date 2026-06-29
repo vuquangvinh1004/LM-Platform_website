@@ -108,60 +108,146 @@ Quy tắc bo sung:
 
 ## 4A. `UserManagementService`
 
-### 4A.1. `createManagedUser()`
+### 4A.1. `createManagedStaffAccount()`
 
 ```ts
-createManagedUser(input: {
+createManagedStaffAccount(input: {
   actorId: string;
   actorRole: Extract<UserRole, 'admin'>;
   role: Extract<UserRole, 'moderator' | 'teacher'>;
   fullName: string;
   email: string;
-  password?: string;
-  accessExpiresAt?: string;
-}): Promise<ServiceResult<{
-  userId: string;
-  role: 'moderator' | 'teacher';
-  profileId: string;
-}>>
+  password: string;
+  roleCode: string;
+}): Promise<ServiceResult<{ userId: string }>>
 ```
 
-Mục đích: Admin tạo tài khoản `moderator` hoặc `teacher` từ module User management.
+Mục đích: Admin tạo tài khoản nhân sự `moderator` hoặc `teacher` từ module User management.
 
 Quy tắc:
 
 - Chỉ `admin` được gọi.
 - `teacher` và `moderator` không tự đăng ký qua public auth flow.
-- Service phải tạo đồng bộ auth user, profile và trạng thái truy cập mặc định phù hợp.
+- `roleCode` là bắt buộc và phải có prefix hợp lệ: `LEC...` cho `teacher`, `MOD...` cho `moderator`; prefix không được đứng một mình.
+- Service phải tạo đồng bộ auth user, profile, `role_code` và trạng thái truy cập mặc định phù hợp.
 - Sau khi tạo thành công, ghi `activity_logs` với action `user.management.created`.
 
-### 4A.2. `updateManagedUserRole()`
+### 4A.1A. `createManagedStudentAccount()`
 
 ```ts
-updateManagedUserRole(input: {
+createManagedStudentAccount(input: {
   actorId: string;
   actorRole: Extract<UserRole, 'admin'>;
-  userId: string;
-  role: Extract<UserRole, 'moderator' | 'teacher' | 'student'>;
-}): Promise<ServiceResult<{ userId: string; role: UserRole }>>
+  studentCode: string;
+  fullName: string;
+  password: string;
+}): Promise<ServiceResult<{ userId: string }>>
 ```
 
-Mục đích: Admin điều chỉnh vai trò vận hành của tài khoản trong UI quản trị.
+Mục đích: Admin tạo một tài khoản sinh viên theo luồng riêng trong User management.
+
+Quy tắc:
+
+- Chỉ `admin` được gọi.
+- Trang đăng nhập không còn public self-signup; toàn bộ tài khoản sinh viên đi qua service này hoặc bản bulk tương ứng.
+- Profile sinh viên phải được tạo/đồng bộ với `student_code`, `access_status = active` và metadata phục vụ quản lý mật khẩu khởi tạo.
+
+### 4A.1B. `createManagedStudentAccountsBulk()`
+
+```ts
+createManagedStudentAccountsBulk(input: {
+  actorId: string;
+  actorRole: Extract<UserRole, 'admin'>;
+  csvContent: string;
+}): Promise<ServiceResult<{
+  createdCount: number;
+  errorCount: number;
+  errors: string[];
+}>>
+```
+
+Mục đích: Admin import hàng loạt tài khoản sinh viên từ file CSV mẫu.
+
+Quy tắc:
+
+- Header cố định: `Mã sinh viên`, `Họ và tên`, `Mật khẩu khởi tạo`.
+- Lỗi từng dòng không làm fail toàn bộ batch.
+- Nếu cùng `studentCode` đã tồn tại, service được phép cập nhật lại mật khẩu/họ tên theo rule idempotent của implementation.
+
+### 4A.2. `updateManagedUserRoleAndStatus()`
+
+```ts
+updateManagedUserRoleAndStatus(input: {
+  actorRole: Extract<UserRole, 'admin'>;
+  userId: string;
+  role: Extract<UserRole, 'admin' | 'moderator' | 'teacher'>;
+  status: 'active' | 'inactive' | 'archived';
+}): Promise<ServiceResult<{ updated: true }>>
+```
+
+Mục đích: Admin điều chỉnh vai trò/trạng thái cho tài khoản nhân sự trong UI quản trị.
 
 ### 4A.3. `listManagedUsers()`
 
 ```ts
-listManagedUsers(input: {
-  actorId: string;
-  actorRole: Extract<UserRole, 'admin'>;
-  role?: UserRole;
-  query?: string;
-  page?: number;
-  pageSize?: number;
-}): Promise<ServiceResult<Paginated<Profile>>>
+listManagedUsers(): Promise<ServiceResult<ManagedUserSummary[]>>
 ```
 
 Mục đích: cấp dữ liệu cho màn hình “User management”.
+
+Quy tắc:
+
+- Danh sách này là danh sách nhân sự; tài khoản `student` được quản lý ở màn hình riêng.
+
+### 4A.4. `listManagedStudentAccounts()`
+
+```ts
+listManagedStudentAccounts(): Promise<ServiceResult<Array<{
+  id: string;
+  studentCode: string;
+  fullName: string;
+  currentPassword: string | null;
+  createdAt: string;
+  status: 'active' | 'inactive' | 'archived';
+}>>>
+```
+
+Mục đích: cấp dữ liệu cho trang “Quản lý tài khoản sinh viên”.
+
+### 4A.5. `updateManagedStudentProfile()`
+
+```ts
+updateManagedStudentProfile(input: {
+  actorRole: Extract<UserRole, 'admin'>;
+  studentId: string;
+  fullName: string;
+}): Promise<ServiceResult<{ updated: true }>>
+```
+
+### 4A.6. `resetManagedStudentPassword()`
+
+```ts
+resetManagedStudentPassword(input: {
+  actorId: string;
+  actorRole: Extract<UserRole, 'admin'>;
+  studentId: string;
+  newPassword: string;
+}): Promise<ServiceResult<{ updated: true }>>
+```
+
+### 4A.7. `deleteManagedStudentAccount()`
+
+```ts
+deleteManagedStudentAccount(input: {
+  actorRole: Extract<UserRole, 'admin'>;
+  studentId: string;
+}): Promise<ServiceResult<{ deleted: true }>>
+```
+
+Quy tắc:
+
+- Chỉ `admin` được cập nhật họ tên, đổi mật khẩu khởi tạo hoặc xóa tài khoản sinh viên.
+- Khi xóa tài khoản sinh viên, các kết quả đã được giảng viên `NỘP KẾT QUẢ` lên `Kết quả đánh giá học phần` phải được giữ lại theo snapshot, không mất theo account gốc.
 
 ---
 
@@ -197,14 +283,14 @@ createCourse(input: {
   courseType?: 'required' | 'elective';
   cloItems?: Array<{ code: string; description: string }>;
   assessmentComponents?: Array<{ type: string; weight: number }>;
-}): Promise<ServiceResult<Course | CourseChangeRequest>>
+}): Promise<ServiceResult<Course>>
 ```
 
 Quy tắc:
 
-- Chỉ `moderator` hoặc `admin` được xử lý yêu cầu tạo học phần ở UI hiện tại.
-- `admin` không đi theo luồng tạo trực tiếp ở UI vận hành tiêu chuẩn; `admin` duyệt yêu cầu tạo học phần để hệ thống sinh học phần thật.
-- `moderator` tạo `course_change_requests(action='create')` như một yêu cầu tạo học phần; chỉ `admin` duyệt, sau đó hệ thống tạo course `active` và cấp scope mặc định cho Mod được giao.
+- Chỉ `moderator` được tạo học phần trong UI vận hành tiêu chuẩn.
+- `admin` không còn tham gia luồng tạo/duyệt học phần.
+- `moderator` tạo course trực tiếp; `course_change_requests` chỉ còn là luồng lịch sử hoặc dữ liệu cũ nếu hệ thống chưa migrate hết.
 - Tổng `assessmentComponents.weight` phải bằng 100% nếu có nhập thành phần đánh giá.
 - `code` unique theo `owner_id`.
 - Default `status = draft`.
@@ -230,8 +316,8 @@ updateCourse(input: {
 
 Quy tắc:
 
-- Chỉ `moderator` hoặc `admin` dùng màn hình quản lý học phần.
-- `moderator` chỉ sửa được học phần trong scope được cấp.
+- Chỉ `moderator` dùng màn hình quản lý học phần.
+- `moderator` sửa trực tiếp học phần mình quản lý.
 - Nếu không tìm thấy hoặc không đủ quyền, trả `NOT_FOUND`.
 
 ### 5.4. `archiveCourse()`
@@ -247,9 +333,24 @@ archiveCourse(input: {
 Quy tắc:
 
 - Không hard-delete.
-- Chỉ `teacher`, `moderator` hoặc `admin` được archive.
-- `teacher` chỉ archive được học phần do mình sở hữu.
-- `teacher` gửi yêu cầu lưu trữ; `moderator/admin` xử lý theo scope. Xóa học phần là Admin-only.
+- Chỉ `moderator` được archive.
+- Archive là thao tác trực tiếp của `moderator`, không đi qua luồng yêu cầu duyệt.
+
+### 5.5. `deleteCourse()`
+
+```ts
+deleteCourse(input: {
+  courseId: string;
+  actorId: string;
+  actorRole: UserRole;
+}): Promise<ServiceResult<{ deleted: true }>>
+```
+
+Quy tắc:
+
+- Chỉ `moderator` được xóa học phần.
+- Xóa chỉ thành công khi học phần không còn lớp hoặc tài nguyên liên kết.
+- `course_change_requests` không còn tham gia vào luồng xóa học phần hiện tại.
 
 ---
 
@@ -297,13 +398,15 @@ createClass(input: {
   semester?: string;
   academicYear?: string;
   status?: 'draft' | 'active' | 'archived';
+  isOpenForEnrollment?: boolean;
 }): Promise<ServiceResult<CourseClass>>
 ```
 
 Quy tắc:
 
-- Chỉ `teacher` hoặc `admin` được dùng service cho luồng yêu cầu mở lớp.
+- Chỉ `teacher` được dùng service cho luồng yêu cầu mở lớp vận hành tiêu chuẩn.
 - `teacher` tạo `class_change_requests(action='create')` như một yêu cầu mở lớp; Mod/Admin duyệt mới sinh lớp thật.
+- `isOpenForEnrollment = true` chỉ là cờ cho phép lớp xuất hiện công khai ở màn đăng nhập; lớp `active` không tự động được xem là lớp mở đăng ký.
 - `admin` không dùng luồng tạo trực tiếp trong UI vận hành tiêu chuẩn; Admin chỉ xử lý yêu cầu mở lớp của giảng viên.
 - `moderator` không tạo lớp; Mod chỉ duyệt yêu cầu thay đổi lớp và xem thống kê theo scope.
 - Nếu học phần đã `archived`, trả `CONFLICT`.
@@ -339,6 +442,7 @@ Quy tắc:
 - Import không được tạo duplicate active membership.
 - Nếu chưa tìm thấy user theo email/student code, trả `needsReview` cho từng dòng.
 - Chỉ `teacher`, `moderator` hoặc `admin` được thêm sinh viên.
+- Không còn là luồng UI chuẩn của giảng viên; workflow teacher-facing hiện tại ưu tiên `enrollment_requests` và duyệt yêu cầu tham gia lớp.
 
 ### 6.3. `importStudentsToClass()`
 
@@ -356,6 +460,7 @@ Quy tắc:
 - CSV phải có cột `fullName` hoặc `ho ten`.
 - CSV phải có ít nhất một cột định danh: `email` hoặc `studentCode`/`ma sinh vien`.
 - Import tái sử dụng cùng rule duplicate và permission của `addStudentsToClass()`.
+- Không còn là luồng UI chuẩn của giảng viên; workflow teacher-facing hiện tại ưu tiên `enrollment_requests` và duyệt yêu cầu tham gia lớp.
 
 ### 6.4. `listClassesForUser()`
 
@@ -370,7 +475,7 @@ listClassesForUser(input: {
 
 Quy tắc:
 
-- `teacher`: chỉ thấy lớp của học phần mình quản lý.
+- `teacher`: chỉ thấy lớp mình phụ trách hoặc được cấp scope phù hợp.
 - `moderator`: chỉ thấy lớp thuộc scope được cấp.
 - `student`: chỉ thấy lớp có active membership.
 - `admin`: thấy tất cả lớp.
@@ -715,6 +820,23 @@ Quy tắc:
 - Chỉ `teacher` được dùng batch duyệt cho các yêu cầu tham gia lớp thuộc lớp/học phần mình phụ trách.
 - Request ngoài scope hoặc không hợp lệ không làm fail toàn bộ batch.
 
+### 8.3A. `updateClassAutoApproveEnrollment()`
+
+```ts
+updateClassAutoApproveEnrollment(input: {
+  classId: string;
+  actorId: string;
+  actorRole: Extract<UserRole, 'teacher' | 'moderator' | 'admin'>;
+  autoApproveEnrollment: boolean;
+}): Promise<ServiceResult<{ classId: string; autoApproveEnrollment: boolean }>>
+```
+
+Quy tắc:
+
+- Chỉ actor quản lý được lớp mới đổi được cờ này.
+- `autoApproveEnrollment = true` nghĩa là yêu cầu tham gia lớp mới của sinh viên được chấp nhận ngay mà không cần teacher bấm duyệt thủ công.
+- `moderator` và `admin` không duyệt từng yêu cầu tham gia lớp; hai vai trò này chỉ có thể can thiệp ở mức quyền quản lý lớp nếu implementation cho phép.
+
 ### 8.4. `listOpenEnrollmentOptions()`
 
 ```ts
@@ -732,7 +854,7 @@ listOpenEnrollmentOptions(): Promise<ServiceResult<{
 }>>
 ```
 
-Mục đích: hiển thị danh sách lớp/học phần đang mở trên màn hình đăng ký.
+Mục đích: hiển thị danh sách lớp/học phần đã được bật `mở đăng ký` trên màn hình đăng ký.
 
 ---
 
@@ -1202,6 +1324,27 @@ Quy tắc:
 - Sau khi hoan tat import (completed/partial/failed), ghi `activity_logs` voi action `submission.import_csv.completed`.
 - Sau khi import thanh cong, service dong bo bang tong hop `course_assessment_results` theo `courseId` cua assessment.
 
+### 9.1A. `publishAssessmentResultsToCourse()`
+
+```ts
+publishAssessmentResultsToCourse(input: {
+  assessmentId: string;
+  actorId: string;
+  actorRole: 'admin' | 'moderator' | 'teacher' | 'student';
+}): Promise<ServiceResult<{ courseId: string; publishedRows: number }>>
+```
+
+Mục đích:
+
+- Giang vien bam `NỘP KẾT QUẢ` de dua cac dong ket qua assessment len bang `Kết quả đánh giá học phần`.
+
+Quy tắc:
+
+- Chi `teacher`, `moderator`, `admin` duoc goi; luong van hanh chinh la giang vien nop ket qua.
+- Chi cac dong co `published_at` khac null moi hien o bang tong hop cap hoc phan cua Mod.
+- Service snapshot `assessment_component_type`, `assessment_clo_codes`, `clo_scores`, `academic_year_snapshot`, `class_code_snapshot`, `student_code_snapshot`, `student_full_name_snapshot` de bang tong hop on dinh voi ca luong cu va luong moi.
+- Neu assessment khong gan CLO thi `assessment_clo_codes = []` va UI cap hoc phan chi hien cot diem tong.
+
 ### 9.2. `upsertExternalSubmission()`
 
 ```ts
@@ -1371,13 +1514,14 @@ Quy tắc:
 - UI không được nhận `storage_path` private.
 - Tài liệu/mô phỏng `archived` không hiển thị trong danh sách mặc định.
 - Liên kết lớp học phần đi qua `class_resource_links`: giảng viên/Mod/Admin thêm hoặc bớt tài nguyên theo từng lớp, không cần duyệt.
+- Khi mở trang `Tài nguyên lớp học`, service chỉ trả về hai nhóm tài nguyên khả dụng cho teacher: tài nguyên `dùng chung` và tài nguyên gắn với đúng học phần của lớp đang thao tác.
 - Tài liệu hoặc mô phỏng HTML upload không chọn học phần được lưu vào thư viện cá nhân của người tải lên.
-- Tài liệu hoặc mô phỏng HTML upload có chọn học phần được ghi `review_status = 'pending_review'`; Mod/Admin duyệt thì tài nguyên mới vào Thư viện dùng chung của học phần.
-- Mô phỏng HTML đã `approved` được gắn vào học phần; thao tác gắn tạo/cập nhật một dòng `simulations` với `config.source = 'html_upload'`.
+- Tài liệu hoặc mô phỏng HTML upload có chọn học phần được ghi `review_status = 'pending_review'`; Mod duyệt thì tài nguyên mới vào Thư viện dùng chung của học phần.
+- Mô phỏng HTML đã `approved` được Mod gắn vào học phần; thao tác gắn tạo/cập nhật một dòng `simulations` với `config.source = 'html_upload'`.
 - Sinh viên mở mô phỏng HTML bằng route signed URL `/api/library/simulation-uploads/[uploadId]/open`, mở tab mới, không nhận storage path.
 - Tài liệu, mô phỏng native và mô phỏng HTML đều có `category_id` và `tags`; UI nhập tags bằng dấu `;`.
-- Mod/Admin quản lý danh mục Thư viện; giảng viên chỉ chọn danh mục khi upload và lọc/tìm theo danh mục hoặc tag.
-- Ẩn tài nguyên cần Mod/Admin duyệt; xóa tài nguyên chỉ Admin được duyệt.
+- Admin quản lý danh mục Thư viện; Mod và giảng viên chỉ chọn danh mục khi upload, duyệt hoặc lọc/tìm theo danh mục hoặc tag.
+- Mod có thể ẩn hoặc xóa trực tiếp tài nguyên dùng chung trong luồng vận hành hiện tại.
 - Đánh giá file `_Mo_phong_VL6.html` trả về như một review tích hợp, không nhúng raw HTML vào runtime.
 
 Output chính:
@@ -1440,7 +1584,7 @@ archiveLibraryCategory(input): Promise<ServiceResult<LibraryCategoryItem>>
 
 Quy tắc:
 
-- Chỉ `moderator` và `admin` được tạo, sửa hoặc lưu trữ danh mục.
+- Chỉ `admin` được tạo, sửa hoặc lưu trữ danh mục.
 - Danh mục dùng `status = archived` thay vì hard-delete để tài nguyên cũ không mất tham chiếu.
 - `teacher`, `moderator`, `admin` được đọc danh mục active để upload và lọc tài nguyên.
 
@@ -1453,9 +1597,11 @@ reviewLibraryArchiveRequest(input): Promise<ServiceResult<LibraryChangeRequestIt
 
 Quy tắc:
 
-- `teacher`, `moderator`, `admin` có thể tạo yêu cầu ẩn hoặc xóa tài liệu/mô phỏng mà họ đang nhìn thấy theo RLS.
+- `teacher` có thể tạo yêu cầu ẩn hoặc xóa tài liệu/mô phỏng mà họ đang nhìn thấy theo RLS.
+- `moderator` có thể ẩn trực tiếp tài nguyên dùng chung; nếu dùng request thì request đó chủ yếu phục vụ audit trail hoặc phối hợp với `admin`.
+- `admin` có thể tạo hoặc xử lý trực tiếp yêu cầu xóa khi cần governance ở mức hệ thống.
 - Một tài nguyên chỉ có một yêu cầu `pending_review` cho cùng action.
-- `moderator` và `admin` được duyệt/từ chối yêu cầu ẩn.
+- `moderator` và `admin` được duyệt/từ chối yêu cầu ẩn nếu luồng request được sử dụng.
 - Chỉ `admin` được duyệt yêu cầu xóa.
 - Khi duyệt `approved` với action `archive`, hệ thống đổi `materials.status` hoặc `simulations.status` sang `archived`.
 - Khi duyệt `approved` với action `delete`, hệ thống xóa metadata tài nguyên; material storage object được gỡ trước nếu có thể.
@@ -1539,7 +1685,7 @@ type NormalizedSubmission = {
 | `POST` | `/api/webhooks/microsoft-form` | Nhận kết quả MS Form từ Power Automate | Shared secret |
 | `GET` | `/api/assessments/:assessmentId/results/export` | Tra ve file export assessment (csv/xlsx) | Supabase Auth |
 | `POST` | `/api/imports/submissions` | Import CSV kết quả | Supabase Auth |
-| `GET` | `/api/enrollment/options` | Danh sách học phần/lớp active cho màn hình đăng ký | Public read |
+| `GET` | `/api/enrollment/options` | Danh sách học phần/lớp đã bật mở đăng ký cho màn hình đăng ký | Public read |
 | `POST` | `/api/enrollment/requests` | Sinh viên gửi yêu cầu đăng ký học phần/lớp | Supabase Auth |
 | `POST` | `/api/enrollment/requests/:id/review` | Giảng viên duyệt một yêu cầu đăng ký thuộc lớp mình phụ trách | Supabase Auth |
 | `POST` | `/api/enrollment/requests/review-batch` | Giảng viên duyệt hàng loạt yêu cầu đăng ký thuộc lớp mình phụ trách | Supabase Auth |

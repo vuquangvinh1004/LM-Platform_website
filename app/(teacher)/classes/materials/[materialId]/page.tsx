@@ -47,7 +47,7 @@ export default async function ManagerMaterialViewerPage({ params, searchParams }
   const managerBackHref = classContextResult?.ok ? `/classes/${classContextResult.data.classInfo.id}/room` : "/classes";
   const managerBackLabel = classContextResult?.ok
     ? `Quay về lớp ${classContextResult.data.classInfo.classTitle || classContextResult.data.classInfo.classCode}`
-    : "Quay về quản lý lớp";
+    : "Quay về Quản lý lớp";
 
   if (isEmbedMode) {
     if (!materialResult.ok) {

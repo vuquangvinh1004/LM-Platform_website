@@ -96,7 +96,7 @@ export default async function StudentMaterialViewerPage({ params, searchParams }
   return (
     <main className="mx-auto min-h-screen max-w-[90rem] px-6 py-12">
       <BackTextLink className="mb-4" href={profileResult.data.role === "student" ? studentBackHref : "/classes"}>
-        {profileResult.data.role === "student" ? studentBackLabel : "Quay về quản lý lớp"}
+        {profileResult.data.role === "student" ? studentBackLabel : "Quay về Quản lý lớp"}
       </BackTextLink>
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-slate-900">Trình xem tài liệu</h1>

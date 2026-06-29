@@ -1,5 +1,4 @@
 import { ClassManagementClient } from "@/app/(teacher)/classes/class-management-client";
-import { AdminAreaLink } from "@/components/ui/admin-area-link";
 import { BackTextLink } from "@/components/ui/back-text-link";
 import { listClassMembersByClassIdsRepository } from "@/lib/repositories/class-repository";
 import { listClassTemplatesByCourseIdsRepository } from "@/lib/repositories/classroom-repository";
@@ -16,7 +15,7 @@ type ClassesPageSearchParams = {
 export default async function ClassesPage(
   { searchParams }: { searchParams?: Promise<ClassesPageSearchParams> },
 ) {
-  const profileResult = await requireRole(["teacher", "moderator", "admin"]);
+  const profileResult = await requireRole(["teacher"]);
 
   if (!profileResult.ok) {
     return (
@@ -110,25 +109,9 @@ export default async function ClassesPage(
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-6 py-12">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        {profileResult.data.role !== "admin" ? (
-          <div className="flex flex-wrap gap-4">
-            {profileResult.data.role !== "teacher" ? (
-              <BackTextLink href="/courses">
-                {profileResult.data.role === "moderator" ? "Quay về Quản lý học phần" : "Quay về học phần"}
-              </BackTextLink>
-            ) : null}
-            <BackTextLink href="/dashboard">
-              {profileResult.data.role === "teacher"
-                ? "Quay về Tổng quan giảng viên"
-                : profileResult.data.role === "moderator"
-                  ? "Quay về Tổng quan giám sát"
-                  : "Quay về bảng điều khiển"}
-            </BackTextLink>
-          </div>
-        ) : (
-          <div />
-        )}
-        {profileResult.data.role === "admin" ? <AdminAreaLink /> : null}
+        <div className="flex flex-wrap gap-4">
+          <BackTextLink href="/dashboard">Quay về Tổng quan giảng viên</BackTextLink>
+        </div>
       </div>
       <div className="mb-6 mt-4">
         <h1 className="text-2xl font-semibold text-slate-900">
@@ -137,7 +120,7 @@ export default async function ClassesPage(
         <p className="mt-1 text-sm text-slate-600">
           {profileResult.data.role === "moderator"
             ? "Xem các lớp thuộc học phần được phân quyền và theo dõi yêu cầu tham gia lớp."
-            : "Theo dõi lớp, quản lý sinh viên và duyệt yêu cầu tham gia lớp."}
+            : "Theo dõi lớp và duyệt yêu cầu tham gia lớp."}
         </p>
       </div>
 

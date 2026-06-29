@@ -39,6 +39,7 @@ export type SubmissionSummary = {
   attemptNumber: number;
   externalResponseId?: string;
   note?: string;
+  cloScores?: Record<string, number | undefined>;
   createdAt: string;
 };
 

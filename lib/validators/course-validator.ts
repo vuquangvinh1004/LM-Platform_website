@@ -6,8 +6,9 @@ const courseCloItemSchema = z.object({
 });
 
 const courseAssessmentComponentSchema = z.object({
-  type: z.string().trim().min(1).max(100),
+  type: z.enum(["diagnostic", "frequent", "periodic", "final"]),
   weight: z.coerce.number().min(0).max(100),
+  cloCodes: z.array(z.string().trim().min(1).max(50)).default([]),
 });
 
 export const createCourseSchema = z.object({
@@ -25,6 +26,31 @@ export const createCourseSchema = z.object({
   cloItems: z.array(courseCloItemSchema).default([]),
   assessmentComponents: z.array(courseAssessmentComponentSchema).default([]),
 }).superRefine((value, context) => {
+  const cloCodeSet = new Set(value.cloItems.map((item) => item.code.trim()).filter(Boolean));
+  const usedComponentTypes = new Set<string>();
+
+  for (const [index, component] of value.assessmentComponents.entries()) {
+    if (usedComponentTypes.has(component.type)) {
+      context.addIssue({
+        code: "custom",
+        message: "Mỗi loại thành phần đánh giá chỉ được khai báo một lần.",
+        path: ["assessmentComponents", index, "type"],
+      });
+    }
+
+    usedComponentTypes.add(component.type);
+
+    for (const cloCode of component.cloCodes) {
+      if (!cloCodeSet.has(cloCode)) {
+        context.addIssue({
+          code: "custom",
+          message: `CLO ${cloCode} không tồn tại trong danh sách chuẩn đầu ra của học phần.`,
+          path: ["assessmentComponents", index, "cloCodes"],
+        });
+      }
+    }
+  }
+
   if (value.assessmentComponents.length === 0) {
     return;
   }
@@ -63,6 +89,31 @@ export const updateCourseSchema = z.object({
   cloItems: z.array(courseCloItemSchema).default([]),
   assessmentComponents: z.array(courseAssessmentComponentSchema).default([]),
 }).superRefine((value, context) => {
+  const cloCodeSet = new Set(value.cloItems.map((item) => item.code.trim()).filter(Boolean));
+  const usedComponentTypes = new Set<string>();
+
+  for (const [index, component] of value.assessmentComponents.entries()) {
+    if (usedComponentTypes.has(component.type)) {
+      context.addIssue({
+        code: "custom",
+        message: "Mỗi loại thành phần đánh giá chỉ được khai báo một lần.",
+        path: ["assessmentComponents", index, "type"],
+      });
+    }
+
+    usedComponentTypes.add(component.type);
+
+    for (const cloCode of component.cloCodes) {
+      if (!cloCodeSet.has(cloCode)) {
+        context.addIssue({
+          code: "custom",
+          message: `CLO ${cloCode} không tồn tại trong danh sách chuẩn đầu ra của học phần.`,
+          path: ["assessmentComponents", index, "cloCodes"],
+        });
+      }
+    }
+  }
+
   if (value.assessmentComponents.length === 0) {
     return;
   }

@@ -2,14 +2,14 @@
 
 import type { ClassActionState } from "@/app/(teacher)/classes/class-action-state";
 import {
-  addStudentsToClassCommand,
   createClassCommand,
   createClassLifecycleRequestCommand,
   createTemplateClassCommand,
   deleteClassTemplateCommand,
-  importStudentsToClassCommand,
   reviewClassChangeRequestCommand,
   reviewEnrollmentRequestCommand,
+  updateClassAutoApproveEnrollmentCommand,
+  updateClassPublicEnrollmentVisibilityCommand,
 } from "@/lib/commands/class-commands";
 import { getClassListPaths, getDashboardPaths, revalidatePaths } from "@/lib/navigation/route-invalidation";
 import { requireRole } from "@/lib/services/auth-service";
@@ -39,6 +39,7 @@ export async function createClassAction(
     semester: String(formData.get("semester") ?? "").trim() || undefined,
     academicYear: String(formData.get("academicYear") ?? "").trim() || undefined,
     status: (formData.get("status") as "draft" | "active" | "archived" | null) ?? "active",
+    isOpenForEnrollment: formData.get("isOpenForEnrollment") === "on",
   });
 
   if (!createResult.ok) {
@@ -52,7 +53,7 @@ export async function createClassAction(
 
   return {
     status: "success",
-    message: profileResult.data.role === "teacher" ? "Đã gửi yêu cầu mở lớp để Mod/Admin duyệt." : "Tạo lớp thành công.",
+    message: profileResult.data.role === "teacher" ? "Đã gửi yêu cầu mở lớp để GIÁM SÁT VIÊN/QUẢN TRỊ VIÊN duyệt." : "Tạo lớp thành công.",
   };
 }
 
@@ -165,10 +166,7 @@ export async function reviewClassEnrollmentRequestAction(
   };
 }
 
-/**
- * Adds a single student manually to a class through the batch-oriented service.
- */
-export async function addStudentToClassAction(
+export async function updateClassPublicEnrollmentVisibilityAction(
   _prevState: ClassActionState,
   formData: FormData,
 ): Promise<ClassActionState> {
@@ -181,79 +179,17 @@ export async function addStudentToClassAction(
     };
   }
 
-  const addResult = await addStudentsToClassCommand({
+  const updateResult = await updateClassPublicEnrollmentVisibilityCommand({
     classId: String(formData.get("classId") ?? "").trim(),
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
-    students: [
-      {
-        email: String(formData.get("email") ?? "").trim() || undefined,
-        studentCode: String(formData.get("studentCode") ?? "").trim() || undefined,
-        fullName: String(formData.get("fullName") ?? "").trim(),
-      },
-    ],
+    isOpenForEnrollment: formData.get("isOpenForEnrollment") === "true",
   });
 
-  if (!addResult.ok) {
+  if (!updateResult.ok) {
     return {
       status: "error",
-      message: addResult.error.message,
-    };
-  }
-
-  revalidatePaths(getClassListPaths());
-
-  if (addResult.data.added > 0 && addResult.data.needsReview.length === 0) {
-    return {
-      status: "success",
-      message: "Thêm sinh viên vào lớp thành công.",
-    };
-  }
-
-  return {
-    status: addResult.data.added > 0 ? "success" : "error",
-    message: addResult.data.needsReview[0]?.reason ?? "Không thể thêm sinh viên vào lớp.",
-  };
-}
-
-/**
- * Imports students from a CSV file for a manageable class.
- * This flow keeps CSV parsing in the service layer so the action stays focused on auth,
- * form decoding, and scope-based invalidation only.
- */
-export async function importStudentsCsvToClassAction(
-  _prevState: ClassActionState,
-  formData: FormData,
-): Promise<ClassActionState> {
-  const profileResult = await requireRole(["teacher", "moderator", "admin"]);
-
-  if (!profileResult.ok) {
-    return {
-      status: "error",
-      message: profileResult.error.message,
-    };
-  }
-
-  const csvFile = formData.get("csvFile");
-
-  if (!(csvFile instanceof File) || csvFile.size === 0) {
-    return {
-      status: "error",
-      message: "Vui lòng chọn tệp CSV để nhập.",
-    };
-  }
-
-  const importResult = await importStudentsToClassCommand({
-    classId: String(formData.get("classId") ?? "").trim(),
-    actorId: profileResult.data.id,
-    actorRole: profileResult.data.role,
-    csvContent: await csvFile.text(),
-  });
-
-  if (!importResult.ok) {
-    return {
-      status: "error",
-      message: importResult.error.message,
+      message: updateResult.error.message,
     };
   }
 
@@ -261,7 +197,47 @@ export async function importStudentsCsvToClassAction(
 
   return {
     status: "success",
-    message: `Nhập CSV hoàn tất: thêm ${importResult.data.added} sinh viên, bỏ qua ${importResult.data.skipped} dòng.`,
+    message: updateResult.data.isOpenForEnrollment
+      ? "Đã mở đăng ký công khai cho lớp."
+      : "Đã ẩn lớp khỏi danh sách đăng ký công khai.",
+  };
+}
+
+export async function updateClassAutoApproveEnrollmentAction(
+  _prevState: ClassActionState,
+  formData: FormData,
+): Promise<ClassActionState> {
+  const profileResult = await requireRole(["teacher", "moderator", "admin"]);
+
+  if (!profileResult.ok) {
+    return {
+      status: "error",
+      message: profileResult.error.message,
+    };
+  }
+
+  const updateResult = await updateClassAutoApproveEnrollmentCommand({
+    classId: String(formData.get("classId") ?? "").trim(),
+    actorId: profileResult.data.id,
+    actorRole: profileResult.data.role,
+    autoApproveEnrollment: formData.get("autoApproveEnrollment") === "true",
+  });
+
+  if (!updateResult.ok) {
+    return {
+      status: "error",
+      message: updateResult.error.message,
+    };
+  }
+
+  revalidatePaths(getClassListPaths());
+  revalidatePaths(getDashboardPaths());
+
+  return {
+    status: "success",
+    message: updateResult.data.autoApproveEnrollment
+      ? "Đã bật duyệt tự động yêu cầu tham gia lớp."
+      : "Đã tắt duyệt tự động yêu cầu tham gia lớp.",
   };
 }
 

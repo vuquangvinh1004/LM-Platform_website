@@ -33,6 +33,7 @@ type SubmissionImportRow = {
   studentCode?: string;
   fullName?: string;
   rawScore?: number;
+  cloScores: Record<string, number | undefined>;
   maxScore?: number;
   submittedAt?: string;
   sourceLabel?: string;
@@ -130,6 +131,7 @@ function parseIsoDatetime(input: string): string | undefined {
 
 function parseSubmissionRowsFromMatrix(
   matrix: string[][],
+  assessmentCloCodes: string[],
 ): { rows: SubmissionImportRow[]; errors: SubmissionImportRowError[] } {
   const headerRow = matrix[0]?.map((cell) => normalizeSpreadsheetHeader(String(cell ?? ""))) ?? [];
   const emailIndex = headerRow.findIndex((value) => emailHeaderAliases.has(value));
@@ -148,19 +150,33 @@ function parseSubmissionRowsFromMatrix(
     { index: fullNameIndex, label: "Họ tên sinh viên" },
     { index: emailIndex, label: "Email" },
     { index: rawScoreIndex, label: "Điểm" },
-    { index: submittedAtIndex, label: "Nộp lúc" },
-    { index: sourceLabelIndex, label: "Nguồn" },
-    { index: noteIndex, label: "Ghi chú" },
   ];
+  const cloIndexes = assessmentCloCodes.map((cloCode) => ({
+    cloCode,
+    index: headerRow.findIndex((value) => value === normalizeSpreadsheetHeader(cloCode)),
+  }));
 
   const missingHeader = expectedOrderedIndexes.find((item) => item.index === -1);
   if (missingHeader) {
-    throw new Error("Tệp import phải có đủ các cột theo thứ tự: Mã sinh viên, Họ tên sinh viên, Email, Điểm, Nộp lúc, Nguồn, Ghi chú.");
+    throw new Error("Tệp import phải có đủ các cột bắt buộc: Mã sinh viên, Họ tên sinh viên, Email, Điểm.");
   }
 
-  for (let idx = 1; idx < expectedOrderedIndexes.length; idx += 1) {
-    if (expectedOrderedIndexes[idx - 1]!.index > expectedOrderedIndexes[idx]!.index) {
-      throw new Error("Thứ tự cột import không hợp lệ. Vui lòng sắp xếp theo: Mã sinh viên, Họ tên sinh viên, Email, Điểm, Nộp lúc, Nguồn, Ghi chú.");
+  const missingCloHeader = cloIndexes.find((item) => item.index === -1);
+  if (missingCloHeader) {
+    throw new Error(`Tệp import thiếu cột ${missingCloHeader.cloCode} theo cấu hình CLO của bài kiểm tra.`);
+  }
+
+  const orderedIndexes = [
+    ...expectedOrderedIndexes,
+    ...cloIndexes.map((item) => ({ index: item.index, label: item.cloCode })),
+    { index: submittedAtIndex, label: "Nộp lúc" },
+    { index: sourceLabelIndex, label: "Nguồn" },
+    { index: noteIndex, label: "Ghi chú" },
+  ].filter((item) => item.index !== -1);
+
+  for (let idx = 1; idx < orderedIndexes.length; idx += 1) {
+    if (orderedIndexes[idx - 1]!.index > orderedIndexes[idx]!.index) {
+      throw new Error("Thứ tự cột import không hợp lệ. Vui lòng sắp xếp theo: Mã sinh viên, Họ tên sinh viên, Email, Điểm, các cột CLO, Nộp lúc, Nguồn, Ghi chú.");
     }
   }
 
@@ -202,6 +218,25 @@ function parseSubmissionRowsFromMatrix(
       errors.push({
         row: rowNumber,
         reason: "Giá trị điểm không hợp lệ.",
+        email,
+        studentCode,
+        fullName,
+      });
+      continue;
+    }
+
+    const cloScores = Object.fromEntries(
+      cloIndexes.map((item) => {
+        const rawValue = item.index === -1 ? "" : String(sourceRow[item.index] ?? "").trim();
+        return [item.cloCode, rawValue ? parseNumber(rawValue) : undefined];
+      }),
+    ) as Record<string, number | undefined>;
+
+    const invalidCloScore = Object.entries(cloScores).find(([, value]) => value === undefined);
+    if (invalidCloScore) {
+      errors.push({
+        row: rowNumber,
+        reason: `Giá trị điểm ${invalidCloScore[0]} không hợp lệ.`,
         email,
         studentCode,
         fullName,
@@ -261,6 +296,7 @@ function parseSubmissionRowsFromMatrix(
       studentCode,
       fullName,
       rawScore,
+      cloScores,
       maxScore,
       submittedAt,
       sourceLabel,
@@ -273,14 +309,14 @@ function parseSubmissionRowsFromMatrix(
   return { rows, errors };
 }
 
-function parseSubmissionRowsFromCsv(csvContent: string): { rows: SubmissionImportRow[]; errors: SubmissionImportRowError[] } {
+function parseSubmissionRowsFromCsv(csvContent: string, assessmentCloCodes: string[]): { rows: SubmissionImportRow[]; errors: SubmissionImportRowError[] } {
   const matrix = readSpreadsheetMatrixFromCsv(csvContent, "Tệp CSV không hợp lệ hoặc không có dữ liệu.");
-  return parseSubmissionRowsFromMatrix(matrix);
+  return parseSubmissionRowsFromMatrix(matrix, assessmentCloCodes);
 }
 
-function parseSubmissionRowsFromSpreadsheet(fileContentBase64: string): { rows: SubmissionImportRow[]; errors: SubmissionImportRowError[] } {
+function parseSubmissionRowsFromSpreadsheet(fileContentBase64: string, assessmentCloCodes: string[]): { rows: SubmissionImportRow[]; errors: SubmissionImportRowError[] } {
   const matrix = readSpreadsheetMatrixFromBase64(fileContentBase64, "Tệp XLS/XLSX không hợp lệ hoặc không có dữ liệu.");
-  return parseSubmissionRowsFromMatrix(matrix);
+  return parseSubmissionRowsFromMatrix(matrix, assessmentCloCodes);
 }
 
 function resolveImportStatus(successRows: number, errorRows: number): ImportJobStatus {
@@ -301,6 +337,24 @@ function getExpectedWebhookSecret(provider: "google_form" | "microsoft_form"): s
   }
 
   return process.env.MICROSOFT_FORM_WEBHOOK_SECRET;
+}
+
+function getAssessmentResultsUpdateBlockedMessage(input: {
+  deliveryMode?: "external" | "internal";
+  resultsLockedAt?: string;
+  resultsPublishedAt?: string;
+}): string | null {
+  if (input.resultsPublishedAt) {
+    return "Kết quả bài kiểm tra này đã được NỘP KẾT QUẢ cho Mod và không thể cập nhật thêm.";
+  }
+
+  if (input.resultsLockedAt) {
+    return input.deliveryMode === "internal"
+      ? "Kết quả bài kiểm tra nội bộ đang bị khóa; bạn không thể chỉnh sửa hoặc cập nhật điểm."
+      : "Kết quả bài kiểm tra đang bị khóa; bạn không thể nhập file hoặc tải kết quả lên.";
+  }
+
+  return null;
 }
 
 async function logWebhookEvent(input: {
@@ -391,11 +445,27 @@ export async function importSubmissionsFromCsv(
     };
   }
 
+  const spreadsheetImportBlockedMessage = getAssessmentResultsUpdateBlockedMessage({
+    deliveryMode: "external",
+    resultsLockedAt: manageableAssessment.resultsLockedAt,
+    resultsPublishedAt: manageableAssessment.resultsPublishedAt,
+  });
+
+  if (spreadsheetImportBlockedMessage) {
+    return {
+      ok: false,
+      error: {
+        code: "CONFLICT",
+        message: spreadsheetImportBlockedMessage,
+      },
+    };
+  }
+
   let parsedRows: SubmissionImportRow[] = [];
   let rowErrors: SubmissionImportRowError[] = [];
 
   try {
-    const parseResult = parseSubmissionRowsFromCsv(parsedInput.data.csvContent);
+    const parseResult = parseSubmissionRowsFromCsv(parsedInput.data.csvContent, manageableAssessment.assessmentCloCodes ?? []);
     parsedRows = parseResult.rows;
     rowErrors = parseResult.errors;
   } catch (error) {
@@ -433,11 +503,54 @@ export async function importSubmissionsFromSpreadsheet(
     };
   }
 
+  if (parsedInput.data.actorRole !== "teacher" && parsedInput.data.actorRole !== "moderator" && parsedInput.data.actorRole !== "admin") {
+    return {
+      ok: false,
+      error: {
+        code: "FORBIDDEN",
+        message: "Bạn không có quyền nhập bài nộp.",
+      },
+    };
+  }
+
+  const manageableAssessment = await findManageableAssessmentRepository({
+    assessmentId: parsedInput.data.assessmentId,
+  });
+
+  if (!manageableAssessment) {
+    return {
+      ok: false,
+      error: {
+        code: "NOT_FOUND",
+        message: "Không tìm thấy bài kiểm tra hoặc bạn không có quyền nhập bài nộp.",
+      },
+    };
+  }
+
+  const csvImportBlockedMessage = getAssessmentResultsUpdateBlockedMessage({
+    deliveryMode: "external",
+    resultsLockedAt: manageableAssessment.resultsLockedAt,
+    resultsPublishedAt: manageableAssessment.resultsPublishedAt,
+  });
+
+  if (csvImportBlockedMessage) {
+    return {
+      ok: false,
+      error: {
+        code: "CONFLICT",
+        message: csvImportBlockedMessage,
+      },
+    };
+  }
+
   let parsedRows: SubmissionImportRow[] = [];
   let rowErrors: SubmissionImportRowError[] = [];
 
   try {
-    const parseResult = parseSubmissionRowsFromSpreadsheet(parsedInput.data.fileContentBase64);
+    const parseResult = parseSubmissionRowsFromSpreadsheet(
+      parsedInput.data.fileContentBase64,
+      manageableAssessment.assessmentCloCodes ?? [],
+    );
     parsedRows = parseResult.rows;
     rowErrors = parseResult.errors;
   } catch (error) {
@@ -486,6 +599,22 @@ async function importParsedSubmissionRows(input: {
       error: {
         code: "NOT_FOUND",
         message: "Không tìm thấy bài kiểm tra hoặc bạn không có quyền nhập bài nộp.",
+      },
+    };
+  }
+
+  const parsedImportBlockedMessage = getAssessmentResultsUpdateBlockedMessage({
+    deliveryMode: "external",
+    resultsLockedAt: manageableAssessment.resultsLockedAt,
+    resultsPublishedAt: manageableAssessment.resultsPublishedAt,
+  });
+
+  if (parsedImportBlockedMessage) {
+    return {
+      ok: false,
+      error: {
+        code: "CONFLICT",
+        message: parsedImportBlockedMessage,
       },
     };
   }
@@ -556,6 +685,7 @@ async function importParsedSubmissionRows(input: {
           importedSourceLabel: row.sourceLabel,
           note: row.note,
           importNote: row.note,
+          cloScores: row.cloScores,
         },
       });
 
@@ -694,6 +824,31 @@ export async function upsertExternalSubmission(
         error: {
           code: "NOT_FOUND",
           message: "Không tìm thấy bài kiểm tra để ghi nhận bài nộp từ webhook.",
+        },
+      };
+    }
+
+    const webhookBlockedMessage = getAssessmentResultsUpdateBlockedMessage({
+      deliveryMode: assessment.deliveryMode,
+      resultsLockedAt: assessment.resultsLockedAt,
+      resultsPublishedAt: assessment.resultsPublishedAt,
+    });
+
+    if (webhookBlockedMessage) {
+      await logWebhookEvent({
+        action: "submission.webhook.rejected",
+        assessmentId: parsedInput.data.assessmentId,
+        metadata: {
+          provider: parsedInput.data.provider,
+          reason: webhookBlockedMessage,
+        },
+      });
+
+      return {
+        ok: false,
+        error: {
+          code: "CONFLICT",
+          message: webhookBlockedMessage,
         },
       };
     }

@@ -75,6 +75,7 @@ export async function createEnrollmentRequests(
       ok: true,
       data: {
         created: result.created.length,
+        autoApproved: result.autoApproved,
         skipped: duplicates.length,
         duplicates,
       },

@@ -4,6 +4,8 @@ import {
   createClassLifecycleRequest,
   importStudentsToClass,
   reviewClassChangeRequest,
+  updateClassPublicEnrollmentVisibility,
+  updateClassAutoApproveEnrollment,
 } from "@/lib/services/class-service";
 import { createTemplateClass, deleteClassTemplate } from "@/lib/services/classroom-service";
 import { reviewEnrollmentRequest } from "@/lib/services/enrollment-service";
@@ -30,6 +32,14 @@ export async function addStudentsToClassCommand(input: Parameters<typeof addStud
 
 export async function importStudentsToClassCommand(input: Parameters<typeof importStudentsToClass>[0]) {
   return importStudentsToClass(input);
+}
+
+export async function updateClassPublicEnrollmentVisibilityCommand(input: Parameters<typeof updateClassPublicEnrollmentVisibility>[0]) {
+  return updateClassPublicEnrollmentVisibility(input);
+}
+
+export async function updateClassAutoApproveEnrollmentCommand(input: Parameters<typeof updateClassAutoApproveEnrollment>[0]) {
+  return updateClassAutoApproveEnrollment(input);
 }
 
 export async function deleteClassTemplateCommand(input: Parameters<typeof deleteClassTemplate>[0]) {

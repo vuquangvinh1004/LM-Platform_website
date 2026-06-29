@@ -1420,6 +1420,7 @@ export async function createTemplateClass(
       classCode: templateCode,
       title: input.name,
       status: "draft",
+      isOpenForEnrollment: false,
     });
 
     await createClassTemplateRepository({

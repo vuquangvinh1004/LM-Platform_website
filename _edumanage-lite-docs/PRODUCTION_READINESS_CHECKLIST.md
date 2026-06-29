@@ -52,7 +52,7 @@ Go-live chi duoc thuc hien khi tat ca gate P0/P1 pass.
 - [ ] Da review SERVICE_CONTRACT thay doi (neu co).
 - [ ] Da xac nhan khong co breaking change voi luong teacher/student chinh.
 - [ ] Da xac nhan migration moi cho `global_notifications`, `question_bank_items`, `course_assessment_results`, `personal_library_settings` da ap dung day du.
-- [ ] Da xac nhan luong `teacher gui yeu cau mo lop / mod-admin duyet` va `teacher duyet yeu cau tham gia lop` khong bi lech voi UI production.
+- [ ] Da xac nhan luong `teacher gui yeu cau mo lop / mod-admin duyet`, `teacher duyet yeu cau tham gia lop` hoac bat `duyet tu dong`, va `admin tao tai khoan sinh vien/nhan su` khong bi lech voi UI production.
 
 ## 4. Deploy procedure (Vercel + Supabase Cloud)
 
@@ -136,8 +136,10 @@ Nguyen tac uu tien:
 | SMK-014 | Personal library | Giang vien upload vao Thu vien ca nhan trong quota | teacher | Upload thanh cong, usage cap nhat dung | P1 | [ ] Pass / [ ] Fail |
 | SMK-015 | Personal library quota | Upload vuot quota Thu vien ca nhan bi chan | teacher | He thong tra validation loi ro rang | P1 | [ ] Pass / [ ] Fail |
 | SMK-016 | Enrollment approval | Sinh vien gui yeu cau tham gia lop, chi giang vien duyet duoc | student, teacher | Teacher duyet duoc, Mod/Admin khong thay action duyet yeu cau tham gia lop | P0 | [ ] Pass / [ ] Fail |
+| SMK-016A | Auto enrollment approval | Giang vien bat `duyet tu dong`, sinh vien gui yeu cau tham gia lop | teacher, student | Yeu cau moi duoc chap nhan ngay, sinh vien vao lop ma khong can thao tac duyet tay | P0 | [ ] Pass / [ ] Fail |
 | SMK-017 | Question bank | Giang vien gan cau hoi tu ngan hang de thi vao bai kiem tra | teacher | Lien ket tao thanh cong dung theo hoc phan | P1 | [ ] Pass / [ ] Fail |
-| SMK-018 | Course assessment archive | Ket qua import/webhook duoc tong hop theo hoc phan | teacher, admin | `course_assessment_results` duoc cap nhat dung | P1 | [ ] Pass / [ ] Fail |
+| SMK-018 | Course assessment aggregate | Ket qua import/webhook duoc tong hop theo hoc phan va hien cho Mod sau khi giang vien nop | teacher, moderator | `course_assessment_results` duoc cap nhat dung va bang `Kết quả đánh giá học phần` hien du lieu dung | P1 | [ ] Pass / [ ] Fail |
+| SMK-019 | Class resource scope | Giang vien mo trang `Tài nguyên lớp học` tu `Man chieu`, `Tu tai lieu`, `Thanh phan cua bai giang` hoac `Tai lieu doc them` | teacher | Chi hien `Tài liệu dùng chung` va tai nguyen gan voi dung hoc phan cua lop hien tai | P1 | [ ] Pass / [ ] Fail |
 
 ## 7. Go/No-Go criteria
 
@@ -160,7 +162,7 @@ No-Go khi:
 - [ ] Duong dan backup folder + `manifest.json`.
 - [ ] Ket qua smoke test matrix da dien.
 - [ ] Quyết dinh go/no-go va nguoi phe duyet.
-- [ ] Bang doi chieu rule hien hanh: notifications, question bank, personal library quota, duyet truy cap, yeu cau mo lop, yeu cau tao hoc phan, User management.
+- [ ] Bang doi chieu rule hien hanh: notifications, question bank, personal library quota, duyet truy cap, yeu cau mo lop, duyet tu dong yeu cau vao lop, pham vi `Tài nguyên lớp học`, Mod quan ly hoc phan truc tiep, User management.
 
 ## 9. Delta follow-up sau release
 

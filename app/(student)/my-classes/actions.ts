@@ -39,7 +39,10 @@ export async function requestClassEnrollmentAction(
   if (result.data.created > 0) {
     return {
       status: "success",
-      message: "Đã gửi yêu cầu tham gia lớp. Giảng viên/Mod/Admin sẽ duyệt trước khi lớp xuất hiện trong danh sách của bạn.",
+      message:
+        result.data.autoApproved > 0
+          ? "Đã tự động duyệt yêu cầu tham gia lớp. Lớp đã xuất hiện trong danh sách của bạn."
+          : "Đã gửi yêu cầu tham gia lớp. Giảng viên sẽ duyệt trước khi lớp xuất hiện trong danh sách của bạn.",
     };
   }
 

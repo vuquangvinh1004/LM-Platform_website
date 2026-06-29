@@ -867,6 +867,38 @@ export async function finalizeAssessmentSubmission(
       return definitionResult;
     }
 
+    const assessmentSummary = await getAssessmentSummaryRepository(attemptView.attempt.assessmentId);
+
+    if (!assessmentSummary) {
+      return {
+        ok: false,
+        error: {
+          code: "NOT_FOUND",
+          message: "Không tìm thấy bài kiểm tra cần chấm.",
+        },
+      };
+    }
+
+    if (assessmentSummary.resultsPublishedAt) {
+      return {
+        ok: false,
+        error: {
+          code: "CONFLICT",
+          message: "Kết quả bài kiểm tra này đã được NỘP KẾT QUẢ cho Mod và không thể cập nhật điểm thêm nữa.",
+        },
+      };
+    }
+
+    if (assessmentSummary.resultsLockedAt) {
+      return {
+        ok: false,
+        error: {
+          code: "CONFLICT",
+          message: "Kết quả bài kiểm tra nội bộ đang bị khóa; bạn không thể chỉnh sửa hoặc cập nhật điểm.",
+        },
+      };
+    }
+
     const definition = definitionResult.data;
     const targetQuestion = definition.questions.find((question) => question.questionBankItemId === parsedInput.data.questionBankItemId);
 

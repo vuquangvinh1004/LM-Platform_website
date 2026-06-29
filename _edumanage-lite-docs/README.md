@@ -22,10 +22,10 @@ LMP được thiết kế để:
 
 | Nhóm người dùng | Nhu cầu chính |
 |---|---|
-| Giảng viên | Quản lý học phần, lớp học, tài liệu, bài kiểm tra, kết quả học tập |
+| Giảng viên | Vận hành lớp học mình phụ trách, sử dụng học phần được phân công, quản lý tài liệu/bài kiểm tra và theo dõi kết quả học tập |
 | Sinh viên | Truy cập học phần, đọc/tải tài liệu, làm bài kiểm tra, theo dõi trạng thái học tập |
-| Điều phối viên học phần (Mod) | Duyệt yêu cầu theo scope học phần/lớp, quản lý tài nguyên dùng chung, theo dõi kết quả theo học phần |
-| Quản trị viên hệ thống | Quản lý người dùng, phân quyền, cấu hình hệ thống, kiểm soát dữ liệu |
+| Giám sát viên học phần (`moderator`/`Mod`) | Toàn quyền tạo, chỉnh sửa, lưu trữ và xóa học phần; quản lý tài nguyên dùng chung; theo dõi kết quả theo học phần |
+| Quản trị viên hệ thống (`admin`) | Quản lý người dùng, phân quyền, cấu hình hệ thống, kiểm soát dữ liệu, báo cáo tổng hợp |
 
 ---
 
@@ -33,11 +33,11 @@ LMP được thiết kế để:
 
 Phiên bản đầu của ứng dụng tập trung vào:
 
-- Đăng nhập, quản lý người dùng và phân quyền cơ bản: sinh viên tự đăng ký; tài khoản giảng viên và moderator do Admin tạo.
-- Quản lý học phần: moderator gửi yêu cầu tạo học phần, Admin duyệt, mô tả học phần, danh sách tài liệu.
-- Quản lý tài liệu: tải lên PDF/slide/file vào thư viện cá nhân hoặc gửi duyệt vào thư viện dùng chung, đọc trực tiếp, tải xuống bằng quyền truy cập hợp lệ.
-- Quản lý lớp học: giảng viên gửi yêu cầu mở lớp, Mod/Admin duyệt, thêm sinh viên, gắn lớp với học phần.
-- Quản lý bài kiểm tra: gắn link Google Form hoặc Microsoft Form, hoặc chạy internal runtime theo snapshot câu hỏi; lưu thời hạn làm bài, thời lượng, trạng thái mở/đóng và dùng ngân hàng đề thi theo học phần.
+- Đăng nhập, quản lý người dùng và phân quyền cơ bản: toàn bộ tài khoản sinh viên, giảng viên và giám sát viên do Admin khởi tạo trong `User management`; trang đăng nhập không còn public self-signup.
+- Quản lý học phần: moderator tạo/sửa/lưu trữ/xóa học phần trực tiếp, mô tả học phần, danh sách tài liệu.
+- Quản lý tài liệu: tải lên PDF/slide/file vào thư viện cá nhân, gửi Mod duyệt vào thư viện dùng chung theo học phần, đọc trực tiếp và tải xuống bằng quyền truy cập hợp lệ.
+- Quản lý lớp học: giảng viên gửi yêu cầu mở lớp, Mod/Admin duyệt, gắn lớp với học phần; sinh viên tự gửi yêu cầu tham gia lớp và giảng viên có thể bật `duyệt tự động`; chỉ các lớp được bật `mở đăng ký` mới xuất hiện công khai ở trang đăng nhập.
+- Quản lý bài kiểm tra: gắn link Google Form hoặc Microsoft Form, hoặc chạy internal runtime theo snapshot câu hỏi; lưu thời hạn làm bài, thời lượng, trạng thái mở/đóng, dùng ngân hàng đề thi theo học phần và cho giảng viên `NỘP KẾT QUẢ` lên bảng tổng hợp cấp học phần của Mod.
 - Ghi nhận kết quả: nhập thủ công, import CSV hoặc đồng bộ qua webhook ở mức tối thiểu.
 - Dashboard vai trò vận hành: xem số sinh viên, số bài đã làm, điểm, trạng thái hoàn thành, thông báo chung và xuất Excel.
 
@@ -100,11 +100,46 @@ Các file trong bộ tài liệu nội bộ ưu tiên dùng một bộ thuật n
 
 - `User management`: module quản trị tài khoản, vai trò, vòng đời truy cập và cấp quyền vận hành.
 - `Duyệt truy cập`: thao tác duyệt hoặc gia hạn quyền học tập/truy cập của sinh viên.
-- `Yêu cầu tạo học phần`: yêu cầu do moderator gửi để Admin duyệt và sinh học phần chính thức.
+- `Yêu cầu tạo học phần`: luồng cũ đã bỏ; Mod tạo học phần trực tiếp.
 - `Yêu cầu mở lớp`: yêu cầu do giảng viên gửi để Mod/Admin duyệt và sinh lớp chính thức.
+- `Lớp mở đăng ký`: lớp học phần được giảng viên bật cờ công khai để hiển thị ở khung đăng ký trên trang đăng nhập; không đồng nghĩa với mọi lớp `active`.
 - `Yêu cầu tham gia lớp`: yêu cầu do sinh viên gửi để giảng viên phụ trách lớp duyệt.
+- `Duyệt tự động yêu cầu vào lớp`: cờ ở trang Quản lý lớp cho phép giảng viên tự động chấp nhận mọi yêu cầu tham gia lớp mới của sinh viên.
+- `Kết quả đánh giá học phần`: bảng tổng hợp theo học phần dành cho Mod, nhận dữ liệu khi giảng viên bấm `NỘP KẾT QUẢ` từ trang kết quả bài kiểm tra.
+- `Tài liệu dùng chung`: tài nguyên Thư viện không gắn riêng một học phần nào; khi giảng viên chọn tài nguyên cho lớp, nhóm này luôn được hiển thị cùng với tài nguyên của đúng học phần lớp đó.
 
 Khi cần nhắc đến nền tảng kỹ thuật, dùng `Supabase Auth` theo nghĩa hạ tầng đăng nhập; khi nhắc đến nghiệp vụ quản trị tài khoản, dùng `User management`.
+
+---
+
+## 6B. Quy trình đồng bộ policy và thuật ngữ cho toàn bộ docs
+
+Mỗi khi phát triển tính năng mới hoặc điều chỉnh tính năng cũ có liên quan đến quyền, workflow nghiệp vụ, route truy cập, trạng thái dữ liệu, thuật ngữ UI hoặc service contract, phải chạy đủ quy trình đồng bộ tài liệu sau:
+
+1. `Docs sweep`
+   Mục tiêu: cập nhật các file nguồn chân lý chính để phản ánh đúng thay đổi nghiệp vụ hoặc kỹ thuật.
+   File ưu tiên rà soát: `ARCHITECTURE.md`, `SPEC_FINAL.md`, `DATABASE_SCHEMA.md`, `SERVICE_CONTRACT.md`, `ROADMAP.md`, `README.md`.
+2. `Policy sweep`
+   Mục tiêu: tách rõ quyền theo vai trò, đặc biệt giữa `admin`, `moderator`, `teacher`, `student`, và loại bỏ các câu mô tả quyền cũ còn sót.
+   Trọng tâm: actor nào tạo, actor nào duyệt, actor nào vận hành trực tiếp, actor nào chỉ giữ governance hệ thống.
+3. `Consistency sweep` riêng cho `REQUIREMENTS.md`
+   Mục tiêu: đồng bộ role matrix, module scope, thực thể dữ liệu và tiêu chí MVP để file yêu cầu ngắn gọn này không mâu thuẫn với các file chi tiết hơn.
+4. `Final glossary sweep` cho `GLOSSARY.md`
+   Mục tiêu: khóa lại thuật ngữ chuẩn dùng xuyên suốt UI, docs, service names, comments và test notes.
+
+Checklist thực thi:
+
+- Xác định thay đổi có chạm tới `role`, `permission`, `approval flow`, `shared/personal library`, `assessment`, `CLO`, `import/export`, `storage visibility`, `route access` hay không.
+- Nếu có, cập nhật file chi tiết trước rồi mới cập nhật file tóm tắt.
+- Sau mỗi sweep, chạy tìm kiếm theo từ khóa cũ để bắt câu mô tả legacy còn sót.
+- Nếu thay đổi làm xuất hiện thuật ngữ mới hoặc đổi nghĩa thuật ngữ cũ, bắt buộc cập nhật `GLOSSARY.md`.
+- Không xem task hoàn tất nếu code đã đổi nhưng bộ docs còn mô tả hai policy khác nhau.
+
+Nguyên tắc áp dụng:
+
+- `Moderator` là actor vận hành học phần và các tài nguyên dùng chung theo học phần, trừ khi một tài liệu đặc tả mới ghi ngoại lệ rõ ràng.
+- `Admin` mặc định là actor governance hệ thống: user management, scope, quota, category, auditability, cấu hình và báo cáo tổng hợp.
+- `README.md` là nơi giữ quy trình; `ARCHITECTURE.md`, `DATABASE_SCHEMA.md`, `SERVICE_CONTRACT.md` là nơi giữ sự thật chi tiết; `REQUIREMENTS.md` và `GLOSSARY.md` là hai bước khóa cuối để tránh drift.
 
 ---
 
@@ -233,6 +268,17 @@ Ghi chú:
 
 ---
 
+## 11A. Quy tắc thành phần đánh giá, CLO và import điểm
+
+- `assessment_components` của học phần không còn là text tự do; Mod cấu hình theo 4 loại cố định: `diagnostic`, `frequent`, `periodic`, `final`.
+- Mỗi thành phần đánh giá phải khai báo `weight` và danh sách `cloCodes` được gắn với thành phần đó.
+- Khi giảng viên tạo bài kiểm tra cho lớp, bắt buộc chọn một `Thành phần`; bài kiểm tra sẽ snapshot `assessmentComponentType` và `assessmentCloCodes` từ học phần tại thời điểm tạo.
+- Màn hình kết quả và file mẫu import phải sinh cột động theo thứ tự: `Mã sinh viên | Họ tên | Email | Điểm | CLO... | Nộp lúc | Nguồn | Ghi chú`.
+- Các cột `CLO...` chỉ xuất hiện với những CLO đã gắn cho thành phần đánh giá của bài kiểm tra đó. Ví dụ thành phần `final` gắn `CLO3`, `CLO4` thì sau cột `Điểm` là `CLO3`, `CLO4`.
+- Điểm tổng vẫn lưu ở `score`; điểm theo CLO được lưu kèm trong metadata của submission để phục vụ import/export và hiển thị kết quả chi tiết.
+
+---
+
 ## 12. Triết lý thiết kế phần mềm áp dụng
 
 Dự án này ưu tiên **giảm độ phức tạp dài hạn** hơn là chỉ làm cho tính năng chạy được trước mắt. Khi AI Agent code, phải áp dụng các nguyên tắc sau:
@@ -274,7 +320,7 @@ Không tự ý thay đổi schema, stack, storage layout, API contract hoặc bu
 
 - User management, phân quyền, approval workflow và access lifecycle.
 - Học phần, tài liệu, mô phỏng, thư viện cá nhân và thư viện dùng chung.
-- Lớp học, import danh sách sinh viên, classroom visual layout và direct message.
+- Lớp học, yêu cầu tham gia lớp của sinh viên, `duyệt tự động`, classroom visual layout và direct message.
 - Bài kiểm tra external, import kết quả, webhook đồng bộ, dashboard và export.
 - Phòng học trực quan, bảng đen, bàn giảng viên, tủ tài liệu và màn chiếu.
 

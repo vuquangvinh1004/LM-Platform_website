@@ -50,8 +50,11 @@ export function LibraryChangeRequestsClient({
   const [reviewState, reviewAction, isReviewing] = useActionState(reviewLibraryArchiveRequestAction, initialLibraryActionState);
   const canReview = actorRole === "moderator" || actorRole === "admin";
   const isAdmin = actorRole === "admin";
-  const resourceAction = isAdmin ? directAction : createAction;
-  const isSubmittingResourceAction = isAdmin ? isApplyingDirect : isCreating;
+  const isModerator = actorRole === "moderator";
+  const usesDirectAction = isAdmin || isModerator;
+  const resourceAction = usesDirectAction ? directAction : createAction;
+  const isSubmittingResourceAction = usesDirectAction ? isApplyingDirect : isCreating;
+  const visibleRequests = isModerator ? requests.filter((request) => request.status === "pending_review") : requests;
 
   return (
     <section className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
@@ -60,13 +63,17 @@ export function LibraryChangeRequestsClient({
           <h2 className="text-lg font-semibold text-amber-950">Duyệt xóa/ẩn tài nguyên</h2>
           <p className="mt-1 text-sm text-amber-900">
             {isAdmin
-              ? "Admin ẩn hoặc xóa tài nguyên trực tiếp, không cần tạo yêu cầu duyệt."
-              : "Ẩn tài nguyên do Mod/Admin duyệt. Xóa tài nguyên chỉ Admin được duyệt."}
+              ? "QUẢN TRỊ VIÊN ẩn hoặc xóa tài nguyên trực tiếp, không cần tạo yêu cầu duyệt."
+              : isModerator
+                ? "GIÁM SÁT VIÊN ẩn hoặc xóa tài nguyên trực tiếp trong Thư viện, không cần gửi yêu cầu."
+                : "Ẩn tài nguyên do GIÁM SÁT VIÊN/QUẢN TRỊ VIÊN duyệt. Xóa tài nguyên cần được xử lý tại Thư viện."}
           </p>
         </div>
-        <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-amber-800">
-          {requests.filter((request) => request.status === "pending_review").length} chờ duyệt
-        </span>
+        {!isModerator ? (
+          <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-amber-800">
+            {requests.filter((request) => request.status === "pending_review").length} chờ duyệt
+          </span>
+        ) : null}
       </div>
 
       <form action={resourceAction} className="mt-4 grid gap-4 lg:grid-cols-[170px_1fr_1fr_auto]">
@@ -103,7 +110,7 @@ export function LibraryChangeRequestsClient({
           disabled={isSubmittingResourceAction}
           type="submit"
         >
-          {isAdmin ? "Thực hiện" : "Gửi yêu cầu"}
+          {usesDirectAction ? "Thực hiện" : "Gửi yêu cầu"}
         </button>
       </form>
 
@@ -141,7 +148,7 @@ export function LibraryChangeRequestsClient({
           disabled={isSubmittingResourceAction}
           type="submit"
         >
-          {isAdmin ? "Thực hiện" : "Gửi yêu cầu"}
+          {usesDirectAction ? "Thực hiện" : "Gửi yêu cầu"}
         </button>
       </form>
 
@@ -158,15 +165,16 @@ export function LibraryChangeRequestsClient({
         ) : null,
       )}
 
+      {!isModerator ? (
       <div className="mt-5">
         <h3 className="text-base font-semibold text-amber-950">Yêu cầu đã tạo</h3>
-        {requests.length === 0 ? (
+        {visibleRequests.length === 0 ? (
           <p className="mt-3 rounded-md border border-dashed border-amber-300 bg-white/70 p-4 text-sm text-amber-900">
             Chưa có yêu cầu ẩn tài nguyên.
           </p>
         ) : (
           <div className="mt-3 grid gap-3">
-            {requests.map((request) => (
+            {visibleRequests.map((request) => (
               <article className="rounded-lg border border-amber-200 bg-white p-4" key={request.id}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
@@ -209,6 +217,7 @@ export function LibraryChangeRequestsClient({
           </div>
         )}
       </div>
+      ) : null}
 
       {reviewState.message ? (
         <p

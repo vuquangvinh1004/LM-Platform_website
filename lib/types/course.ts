@@ -11,9 +11,12 @@ export type CourseCloItem = {
   description: string;
 };
 
+export type CourseAssessmentComponentType = "diagnostic" | "frequent" | "periodic" | "final";
+
 export type CourseAssessmentComponent = {
-  type: string;
+  type: CourseAssessmentComponentType;
   weight: number;
+  cloCodes?: string[];
 };
 
 export type CourseModeratorOption = {

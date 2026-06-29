@@ -1,14 +1,15 @@
 import { AssessmentManagementClient } from "@/app/(teacher)/assessments/assessment-management-client";
 import { AdminAreaLink } from "@/components/ui/admin-area-link";
 import { BackTextLink } from "@/components/ui/back-text-link";
+import { listCoursesForUser } from "@/lib/services/course-service";
 import { requireRole } from "@/lib/services/auth-service";
 import { listAssessmentsForManager } from "@/lib/services/assessment-service";
 import { listClassesForUser } from "@/lib/services/class-service";
-import { listCourseAssessmentResultsByCourseIds, listQuestionBankItemsForCourses } from "@/lib/services/question-bank-service";
-import type { CourseAssessmentResultItem, QuestionBankItem } from "@/lib/types/question-bank";
+import { listQuestionBankItemsForCourses } from "@/lib/services/question-bank-service";
+import type { QuestionBankItem } from "@/lib/types/question-bank";
 
 export default async function AssessmentsPage() {
-  const profileResult = await requireRole(["teacher", "moderator", "admin"]);
+  const profileResult = await requireRole(["teacher", "admin"]);
 
   if (!profileResult.ok) {
     return (
@@ -19,7 +20,7 @@ export default async function AssessmentsPage() {
     );
   }
 
-  const [classesResult, assessmentsResult] = await Promise.all([
+  const [classesResult, assessmentsResult, coursesResult] = await Promise.all([
     listClassesForUser({
       actorId: profileResult.data.id,
       actorRole: profileResult.data.role,
@@ -30,13 +31,21 @@ export default async function AssessmentsPage() {
       actorId: profileResult.data.id,
       actorRole: profileResult.data.role,
     }),
+    listCoursesForUser({
+      userId: profileResult.data.id,
+      role: profileResult.data.role,
+      page: 1,
+      pageSize: 100,
+    }),
   ]);
 
-  if (!classesResult.ok || !assessmentsResult.ok) {
+  if (!classesResult.ok || !assessmentsResult.ok || !coursesResult.ok) {
     const errorMessage = !classesResult.ok
       ? classesResult.error.message
       : !assessmentsResult.ok
         ? assessmentsResult.error.message
+        : !coursesResult.ok
+          ? coursesResult.error.message
         : "Không thể tải dữ liệu bài kiểm tra.";
 
     return (
@@ -62,31 +71,16 @@ export default async function AssessmentsPage() {
     ).values(),
   );
 
-  const [questionBankResult, courseResultsResult] = await Promise.all([
-    listQuestionBankItemsForCourses({
-      courseIds: uniqueCourses.map((course) => course.courseId),
-    }),
-    listCourseAssessmentResultsByCourseIds({
-      courseIds: uniqueCourses.map((course) => course.courseId),
-      actorRole: profileResult.data.role,
-    }),
-  ]);
+  const questionBankResult = await listQuestionBankItemsForCourses({
+    courseIds: uniqueCourses.map((course) => course.courseId),
+  });
   const questionBankItemsByCourseId = new Map<string, QuestionBankItem[]>();
-  const courseAssessmentResultsByCourseId = new Map<string, CourseAssessmentResultItem[]>();
 
   if (questionBankResult.ok) {
     for (const item of questionBankResult.data) {
       const existingItems = questionBankItemsByCourseId.get(item.courseId) ?? [];
       existingItems.push(item);
       questionBankItemsByCourseId.set(item.courseId, existingItems);
-    }
-  }
-
-  if (courseResultsResult.ok) {
-    for (const item of courseResultsResult.data) {
-      const existingItems = courseAssessmentResultsByCourseId.get(item.courseId) ?? [];
-      existingItems.push(item);
-      courseAssessmentResultsByCourseId.set(item.courseId, existingItems);
     }
   }
 
@@ -111,13 +105,14 @@ export default async function AssessmentsPage() {
       <AssessmentManagementClient
         actorRole={profileResult.data.role}
         classes={classesResult.data.items}
-        assessments={assessmentsResult.data.items}
-        courseAssessmentResults={uniqueCourses.map((course) => ({
-          courseId: course.courseId,
-          courseCode: course.courseCode,
-          courseTitle: course.courseTitle,
-          items: courseAssessmentResultsByCourseId.get(course.courseId) ?? [],
+        courseMetadata={coursesResult.data.items.map((course) => ({
+          courseId: course.id,
+          courseCode: course.code,
+          courseTitle: course.title,
+          cloItems: course.cloItems,
+          assessmentComponents: course.assessmentComponents,
         }))}
+        assessments={assessmentsResult.data.items}
         questionBankByCourse={uniqueCourses.map((course) => ({
           courseId: course.courseId,
           courseCode: course.courseCode,

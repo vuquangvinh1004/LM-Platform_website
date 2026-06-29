@@ -84,6 +84,7 @@ describe("submission-service", () => {
       classId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
       courseId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
       title: "Assessment Import",
+      deliveryMode: "external",
     });
     mockedFindStudentForExternalSubmissionServiceRepository.mockResolvedValue({
       id: "11111111-1111-4111-8111-111111111111",

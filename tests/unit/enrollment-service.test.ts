@@ -52,6 +52,7 @@ describe("enrollment-service", () => {
         },
       ],
       skipped: [{ courseId: "course-2" }],
+      autoApproved: 0,
     });
 
     const result = await createEnrollmentRequests({
@@ -70,6 +71,7 @@ describe("enrollment-service", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.data.created).toBe(1);
+      expect(result.data.autoApproved).toBe(0);
       expect(result.data.skipped).toBe(2);
       expect(result.data.duplicates).toHaveLength(2);
     }

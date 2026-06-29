@@ -26,6 +26,15 @@ function parseLocalDatetimeToIso(value: FormDataEntryValue | null): string | und
   return parsedDate.toISOString();
 }
 
+function parseAssessmentCloCodes(rawValue: FormDataEntryValue | null): string[] {
+  try {
+    const parsed = JSON.parse(String(rawValue ?? "[]")) as string[];
+    return Array.isArray(parsed) ? parsed.map((value) => String(value).trim()).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
 function buildQuestionBankPayload(formData: FormData):
   | {
       ok: true;
@@ -162,13 +171,15 @@ export async function createAssessmentAction(
     classId,
     courseId,
     actorId: profileResult.data.id,
-    actorRole: profileResult.data.role,
+    actorRole: profileResult.data.role as "teacher",
     title: String(formData.get("title") ?? "").trim(),
     description: String(formData.get("description") ?? "").trim() || undefined,
     deliveryMode: (formData.get("deliveryMode") as "external" | "internal" | null) ?? "external",
     provider: (formData.get("provider") as "google_form" | "microsoft_form" | "manual" | "internal" | "other" | null) ?? "manual",
     formUrl: String(formData.get("formUrl") ?? "").trim() || undefined,
     embedMode: (formData.get("embedMode") as "iframe" | "new_tab" | "disabled" | null) ?? "new_tab",
+    assessmentComponentType: (formData.get("assessmentComponentType") as "diagnostic" | "frequent" | "periodic" | "final" | null) ?? "diagnostic",
+    assessmentCloCodes: parseAssessmentCloCodes(formData.get("assessmentCloCodes")),
     maxScore: maxScoreRaw ? Number(maxScoreRaw) : undefined,
     attemptLimit: attemptLimitRaw ? Number(attemptLimitRaw) : undefined,
     shuffleQuestions: String(formData.get("shuffleQuestions") ?? "") === "on",
@@ -219,7 +230,7 @@ export async function createQuestionBankItemAction(
 
   const result = await createQuestionBankItemCommand({
     actorId: profileResult.data.id,
-    actorRole: profileResult.data.role,
+    actorRole: profileResult.data.role as "teacher" | "moderator" | "admin",
     courseId: String(formData.get("courseId") ?? "").trim(),
     prompt: questionPayload.data.prompt,
     questionType: questionPayload.data.questionType,
@@ -261,7 +272,7 @@ export async function updateAssessmentStatusAction(
   const result = await updateAssessmentStatusCommand({
     assessmentId: String(formData.get("assessmentId") ?? "").trim(),
     actorId: profileResult.data.id,
-    actorRole: profileResult.data.role,
+    actorRole: profileResult.data.role as "teacher" | "moderator" | "admin",
     status: (formData.get("status") as "draft" | "open" | "closed" | "archived" | null) ?? "draft",
   });
 
@@ -296,7 +307,7 @@ export async function deleteAssessmentAction(
   const result = await deleteAssessmentCommand({
     assessmentId: String(formData.get("assessmentId") ?? "").trim(),
     actorId: profileResult.data.id,
-    actorRole: profileResult.data.role,
+    actorRole: profileResult.data.role as "teacher" | "moderator" | "admin",
   });
 
   if (!result.ok) {

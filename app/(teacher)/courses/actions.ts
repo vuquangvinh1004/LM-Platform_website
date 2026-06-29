@@ -8,33 +8,34 @@ import { archiveCourse, assignCourseModerator, assignCourseTeachers, createCours
 import type { CourseAssessmentComponent, CourseCloItem } from "@/lib/types/course";
 
 function parseCloItems(rawValue: FormDataEntryValue | null): CourseCloItem[] {
-  return String(rawValue ?? "")
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [code, ...descriptionParts] = line.split("|");
-      return {
-        code: String(code ?? "").trim(),
-        description: descriptionParts.join("|").trim(),
-      };
-    })
-    .filter((item) => item.code && item.description);
+  try {
+    const parsed = JSON.parse(String(rawValue ?? "[]")) as CourseCloItem[];
+    return parsed
+      .map((item) => ({
+        code: String(item.code ?? "").trim(),
+        description: String(item.description ?? "").trim(),
+      }))
+      .filter((item) => item.code && item.description);
+  } catch {
+    return [];
+  }
 }
 
 function parseAssessmentComponents(rawValue: FormDataEntryValue | null): CourseAssessmentComponent[] {
-  return String(rawValue ?? "")
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [type, weight] = line.split("|");
-      return {
-        type: String(type ?? "").trim(),
-        weight: Number(String(weight ?? "").trim()),
-      };
-    })
-    .filter((item) => item.type && Number.isFinite(item.weight));
+  try {
+    const parsed = JSON.parse(String(rawValue ?? "[]")) as CourseAssessmentComponent[];
+    return parsed
+      .map((item) => ({
+        type: item.type,
+        weight: Number(item.weight),
+        cloCodes: Array.isArray(item.cloCodes)
+          ? item.cloCodes.map((code) => String(code).trim()).filter(Boolean)
+          : [],
+      }))
+      .filter((item) => item.type && Number.isFinite(item.weight));
+  } catch {
+    return [];
+  }
 }
 
 function optionalNumberFromForm(rawValue: FormDataEntryValue | null): number | undefined {
@@ -59,7 +60,7 @@ export async function createCourseAction(
   _prevState: CourseActionState,
   formData: FormData,
 ): Promise<CourseActionState> {
-  const profileResult = await requireRole(["teacher", "moderator", "admin"]);
+  const profileResult = await requireRole(["moderator"]);
 
   if (!profileResult.ok) {
     return {
@@ -95,7 +96,7 @@ export async function createCourseAction(
 
   return {
     status: "success",
-    message: profileResult.data.role === "moderator" ? "Đã gửi yêu cầu tạo học phần để Admin duyệt." : "Tạo học phần thành công.",
+    message: "Tạo học phần thành công.",
   };
 }
 
@@ -106,7 +107,7 @@ export async function updateCourseAction(
   _prevState: CourseActionState,
   formData: FormData,
 ): Promise<CourseActionState> {
-  const profileResult = await requireRole(["teacher", "moderator", "admin"]);
+  const profileResult = await requireRole(["moderator"]);
 
   if (!profileResult.ok) {
     return {
@@ -139,15 +140,9 @@ export async function updateCourseAction(
 
   revalidatePath("/courses");
 
-  const isPendingUpdateRequest = "action" in updateResult.data && updateResult.data.action === "update";
-
   return {
     status: "success",
-    message: isPendingUpdateRequest
-      ? "Đã gửi yêu cầu chỉnh sửa học phần đến Mod quản lý để xác nhận đồng thuận."
-      : profileResult.data.role === "moderator"
-        ? "Đã lưu thay đổi học phần và gửi thông báo cho Admin."
-        : "Cập nhật học phần thành công.",
+    message: "Cập nhật học phần thành công.",
   };
 }
 
@@ -158,7 +153,7 @@ export async function archiveCourseAction(
   _prevState: CourseActionState,
   formData: FormData,
 ): Promise<CourseActionState> {
-  const profileResult = await requireRole(["teacher", "moderator", "admin"]);
+  const profileResult = await requireRole(["moderator"]);
 
   if (!profileResult.ok) {
     return {
@@ -184,7 +179,7 @@ export async function archiveCourseAction(
 
   return {
     status: "success",
-    message: profileResult.data.role === "teacher" ? "Đã gửi yêu cầu lưu trữ học phần để Mod/Admin duyệt." : "Lưu trữ học phần thành công.",
+    message: "Lưu trữ học phần thành công.",
   };
 }
 
@@ -192,7 +187,7 @@ export async function reviewCourseChangeRequestAction(
   _prevState: CourseActionState,
   formData: FormData,
 ): Promise<CourseActionState> {
-  const profileResult = await requireRole(["moderator", "admin"]);
+  const profileResult = await requireRole(["moderator"]);
 
   if (!profileResult.ok) {
     return {
@@ -221,7 +216,7 @@ export async function reviewCourseChangeRequestAction(
 
   return {
     status: "success",
-    message: reviewResult.data.status === "approved" ? "Đã duyệt yêu cầu thay đổi học phần." : "Đã từ chối yêu cầu thay đổi học phần.",
+    message: reviewResult.data.status === "approved" ? "Đã xử lý yêu cầu thay đổi học phần." : "Đã từ chối yêu cầu thay đổi học phần.",
   };
 }
 
@@ -229,7 +224,7 @@ export async function deleteCourseAction(
   _prevState: CourseActionState,
   formData: FormData,
 ): Promise<CourseActionState> {
-  const profileResult = await requireRole(["admin"]);
+  const profileResult = await requireRole(["moderator"]);
 
   if (!profileResult.ok) {
     return {
@@ -274,9 +269,12 @@ export async function assignCourseModeratorAction(
     };
   }
 
+  const actionMode = String(formData.get("actionMode") ?? "save").trim();
+  const moderatorId = actionMode === "remove" ? "" : String(formData.get("moderatorId") ?? "").trim();
+
   const assignResult = await assignCourseModerator({
     courseId: String(formData.get("courseId") ?? "").trim(),
-    moderatorId: String(formData.get("moderatorId") ?? "").trim(),
+    moderatorId,
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
   });
@@ -294,7 +292,9 @@ export async function assignCourseModeratorAction(
 
   return {
     status: "success",
-    message: "Đã giao Mod quản lý học phần.",
+    message: moderatorId
+      ? "Đã cập nhật Giám sát viên quản lý học phần."
+      : "Đã bỏ quyền Giám sát viên quản lý học phần.",
   };
 }
 
@@ -311,9 +311,21 @@ export async function assignCourseTeachersAction(
     };
   }
 
+  const currentTeacherIds = formData
+    .getAll("currentTeacherIds")
+    .map((value) => String(value).trim())
+    .filter(Boolean);
+  const selectedTeacherId = String(formData.get("teacherId") ?? "").trim();
+  const actionMode = String(formData.get("actionMode") ?? "add").trim();
+  const nextTeacherIds = selectedTeacherId
+    ? actionMode === "remove"
+      ? currentTeacherIds.filter((teacherId) => teacherId !== selectedTeacherId)
+      : [...new Set([...currentTeacherIds, selectedTeacherId])]
+    : currentTeacherIds;
+
   const result = await assignCourseTeachers({
     courseId: String(formData.get("courseId") ?? "").trim(),
-    teacherIds: formData.getAll("teacherIds").map((value) => String(value).trim()).filter(Boolean),
+    teacherIds: nextTeacherIds,
     actorId: profileResult.data.id,
     actorRole: profileResult.data.role,
   });
@@ -335,8 +347,11 @@ export async function assignCourseTeachersAction(
 
   return {
     status: "success",
-    message:
-      assignedTeacherCount > 0
+    message: selectedTeacherId
+      ? actionMode === "remove"
+        ? "Đã bỏ quyền giảng dạy của giảng viên khỏi học phần."
+        : "Đã cập nhật giảng viên giảng dạy cho học phần."
+      : assignedTeacherCount > 0
         ? `Đã cập nhật ${assignedTeacherCount} giảng viên phụ trách học phần.`
         : "Đã bỏ toàn bộ giảng viên phụ trách khỏi học phần.",
   };

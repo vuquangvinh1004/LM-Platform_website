@@ -20,6 +20,8 @@ export async function createAssessmentCommand(input: AssessmentMutationActor & {
   provider: "google_form" | "microsoft_form" | "manual" | "internal" | "other";
   formUrl?: string;
   embedMode: "iframe" | "new_tab" | "disabled";
+  assessmentComponentType: "diagnostic" | "frequent" | "periodic" | "final";
+  assessmentCloCodes: string[];
   maxScore?: number;
   attemptLimit?: number;
   shuffleQuestions: boolean;
@@ -41,6 +43,8 @@ export async function createAssessmentCommand(input: AssessmentMutationActor & {
     provider: input.provider,
     formUrl: input.formUrl,
     embedMode: input.embedMode,
+    assessmentComponentType: input.assessmentComponentType,
+    assessmentCloCodes: input.assessmentCloCodes,
     maxScore: input.maxScore,
     attemptLimit: input.attemptLimit,
     shuffleQuestions: input.shuffleQuestions,

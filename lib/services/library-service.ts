@@ -293,10 +293,12 @@ export async function getLibraryOverview(input?: { actorId: string; actorRole: U
               }
             : undefined,
         pendingWorkflow: {
-          uploadPolicy: "Giảng viên, Mod và Admin được tải tài liệu và mô phỏng HTML trực tiếp lên Thư viện.",
+          uploadPolicy:
+            "GIẢNG VIÊN và GIÁM SÁT VIÊN vận hành việc tải tài liệu, tải mô phỏng và gắn tài nguyên theo học phần; QUẢN TRỊ VIÊN không còn thực hiện các thao tác này trong Thư viện.",
           linkPolicy:
-            "Giảng viên được thêm hoặc bớt tài nguyên Thư viện trong từng lớp học phần từ Màn chiếu và Tủ tài liệu.",
-          deletePolicy: "Ẩn tài nguyên cần Mod/Admin duyệt. Xóa tài nguyên cần Admin duyệt trước khi loại khỏi Thư viện.",
+            "GIẢNG VIÊN gắn hoặc bỏ tài nguyên Thư viện trong từng lớp học phần từ các màn hình nghiệp vụ của lớp và học phần.",
+          deletePolicy:
+            "Việc duyệt, ẩn/xóa hoặc điều chỉnh tài nguyên được xử lý trong luồng vận hành của GIÁM SÁT VIÊN và GIẢNG VIÊN; QUẢN TRỊ VIÊN chỉ quản lý Danh mục Thư viện dùng chung.",
         },
         vl6IntegrationReview: {
           fileName: "_Mo_phong_VL6.html",
@@ -627,12 +629,12 @@ export async function reviewLibraryArchiveRequest(
 export async function applyAdminLibraryResourceAction(
   input: ApplyAdminLibraryResourceActionInput,
 ): Promise<ServiceResult<{ applied: true }>> {
-  if (input.actorRole !== "admin") {
+  if (input.actorRole !== "admin" && input.actorRole !== "moderator") {
     return {
       ok: false,
       error: {
         code: "FORBIDDEN",
-        message: "Chỉ Admin được ẩn hoặc xóa tài nguyên trực tiếp.",
+        message: "Chỉ GIÁM SÁT VIÊN hoặc QUẢN TRỊ VIÊN được ẩn hoặc xóa tài nguyên trực tiếp.",
       },
     };
   }

@@ -16,6 +16,10 @@ export function getAssessmentResultsPaths(assessmentId: string): string[] {
   return [`/assessments/${assessmentId}/results`];
 }
 
+export function getCourseAssessmentPublicationPaths(courseId: string): string[] {
+  return [`/courses/${courseId}/results`];
+}
+
 export function getStudentAssessmentPaths(assessmentId: string): string[] {
   return [`/my-classes/assessments/${assessmentId}`];
 }
@@ -31,4 +35,3 @@ export function getDashboardPaths(): string[] {
 export function getLibraryPaths(): string[] {
   return ["/library", "/materials"];
 }
-

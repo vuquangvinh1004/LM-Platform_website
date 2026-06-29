@@ -24,12 +24,12 @@ Quy ước UI chung:
 Ma trận quyền chức năng chính đã chốt:
 
 - Lớp học: giảng viên gửi yêu cầu mở lớp gắn với học phần; Mod/Admin duyệt yêu cầu và quản lý lớp theo scope; Mod không tạo lớp; Admin không tạo lớp trực tiếp trong luồng vận hành chuẩn.
-- Học phần: Mod gửi yêu cầu tạo học phần và mặc định được gán quản lý sau khi Admin duyệt; Admin duyệt, giao scope và quản lý học phần, không tự đi theo luồng tạo trực tiếp trong UI vận hành chuẩn.
-- Thư viện: giảng viên có Thư viện cá nhân riêng mặc định 50 MB, Admin có thể điều chỉnh quota; giảng viên tải tài nguyên lên thư viện cá nhân, xóa tài nguyên cá nhân của mình, đưa tài nguyên vào lớp mình giảng dạy và gửi yêu cầu đưa tài nguyên vào Thư viện dùng chung; tài nguyên dùng chung muốn ẩn thì gửi Mod duyệt, muốn xóa thì gửi Admin duyệt. Mod tải tài nguyên trực tiếp vào Thư viện dùng chung, duyệt ẩn tài nguyên và yêu cầu xóa nhưng không quản lý Danh mục Thư viện; Admin tải trực tiếp, ẩn/xóa tài nguyên và quản lý Danh mục Thư viện.
-- Mô phỏng HTML: giảng viên chỉ tải lên; Mod tải lên, gắn vào học phần và gửi yêu cầu tích hợp native; Admin duyệt/từ chối tích hợp native và không gắn mô phỏng HTML vào học phần.
-- Bài kiểm tra: giảng viên tạo bài kiểm tra; đề thi có thể lấy câu hỏi từ Ngân hàng đề thi theo từng học phần; kết quả lớp học được tổng hợp thêm về kho Kết quả kiểm tra theo học phần để Mod/Admin theo dõi.
+- Học phần: Mod tạo, sửa, lưu trữ và xóa học phần trực tiếp; Admin không còn tham gia luồng vận hành học phần, chỉ còn vai trò quản trị hệ thống và báo cáo tổng hợp sau này.
+- Thư viện: giảng viên có Thư viện cá nhân riêng mặc định 50 MB, Admin có thể điều chỉnh quota; giảng viên tải tài nguyên lên thư viện cá nhân, xóa tài nguyên cá nhân của mình, đưa tài nguyên vào lớp mình giảng dạy và gửi yêu cầu đưa tài nguyên vào Thư viện dùng chung; Mod duyệt tài nguyên gắn học phần, tải trực tiếp tài nguyên dùng chung theo scope và có thể ẩn hoặc xóa trực tiếp tài nguyên dùng chung; Admin quản lý Danh mục Thư viện, quota và các quyết định governance hệ thống.
+- Mô phỏng HTML: giảng viên chỉ tải lên; Mod duyệt mô phỏng gắn học phần, gắn bản đã duyệt vào học phần và vận hành thư viện mô phỏng dùng chung; Admin không gắn mô phỏng HTML vào học phần, chỉ quyết định tích hợp native hoặc xử lý governance hệ thống khi cần.
+- Bài kiểm tra: giảng viên tạo bài kiểm tra; đề thi có thể lấy câu hỏi từ Ngân hàng đề thi theo từng học phần; sau khi import/sync xong, giảng viên chủ động `NỘP KẾT QUẢ` để Mod theo dõi ở bảng `Kết quả đánh giá học phần`.
 - Thông báo: dashboard của Admin, Mod, Giảng viên đều có khối Thông báo chung; Admin và Mod được gửi/đọc, Giảng viên chỉ được đọc.
-- User management: sinh viên tự đăng ký; tài khoản giảng viên và moderator do Admin tạo trong module User management, kèm phân quyền và vòng đời duyệt truy cập.
+- User management: toàn bộ tài khoản sinh viên, giảng viên và giám sát viên do Admin tạo trong module User management; trang đăng nhập không còn self-signup công khai, nhưng vẫn giữ vòng đời duyệt/gia hạn truy cập ở tầng nghiệp vụ.
 - Phòng học: khung Kiểm tra nằm ngay dưới Bảng đen, tự ẩn khi không có bài kiểm tra đang mở; khi có bài đang mở thì hiển thị tiêu đề, hạn nộp và nút vào phòng kiểm tra. Trang làm bài của sinh viên yêu cầu bấm Bắt đầu làm bài rồi mới hiển thị nội dung và đồng hồ đếm ngược.
 
 ---
@@ -125,7 +125,7 @@ Acceptance:
 
 Acceptance:
 
-- [x] Moderator gửi được yêu cầu tạo học phần để Admin duyệt.
+- [x] Da chot lai luong hoc phan moi: Moderator tao hoc phan truc tiep, khong can Admin duyet.
 - [x] Actor theo quyền chỉ thấy học phần trong phạm vi sở hữu hoặc scope được cấp.
 - [x] Course code unique theo owner/scope nghiệp vụ áp dụng.
 
@@ -181,7 +181,7 @@ Acceptance:
 ### Sprint 3.3.1: Student approval workflow
 
 - [x] Bổ sung trạng thái truy cập sinh viên: `pending_approval`, `active`, `suspended`, `expired`.
-- [x] Luồng sinh viên tự đăng ký nhưng chưa vào được khu học tập khi chưa duyệt.
+- [x] Luồng self-signup sinh viên cũ đã từng được hỗ trợ và bị chặn khu học tập khi chưa duyệt; hiện tại public self-signup đã bị tắt và thay bằng luồng Admin tạo tài khoản sinh viên.
 - [x] Màn hình duyệt truy cập sinh viên chờ duyệt cho `admin` và `moderator`.
 - [x] Giảng viên duyệt trong phạm vi học phần/lớp do mình sở hữu hoặc được cấp quyền.
 
@@ -215,7 +215,7 @@ Acceptance:
 
 ### Sprint 3.3.4: Đăng ký nhiều học phần và duyệt theo phạm vi
 
-- [x] Hiển thị danh sách học phần/lớp đang mở khi sinh viên khởi tạo tài khoản.
+- [x] Hiển thị danh sách học phần/lớp đã bật `mở đăng ký` khi sinh viên khởi tạo tài khoản.
 - [x] Sinh viên gửi yêu cầu đăng ký nhiều học phần cùng lúc.
 - [x] Giảng viên chỉ duyệt yêu cầu thuộc học phần mình phụ trách.
 - [x] Giảng viên duyệt hàng loạt yêu cầu theo phạm vi lớp/học phần mình phụ trách.
@@ -264,7 +264,7 @@ Ghi chú tiến độ RLS hiện tại:
 
 E2E test:
 
-- [x] Sinh viên tự đăng ký -> bị chặn khu học tập khi chưa duyệt.
+- [x] Regression của luồng self-signup cũ đã được kiểm soát; hiện tại public self-signup đã bị tắt và sinh viên được Admin khởi tạo.
 - [x] Admin/moderator duyệt -> sinh viên truy cập được lớp hợp lệ.
 - [x] Hết hạn truy cập -> sinh viên bị chặn -> gia hạn -> truy cập lại bình thường.
 - [x] Sinh viên gửi batch yêu cầu tham gia nhiều học phần và nhận kết quả duyệt theo từng học phần.
@@ -438,9 +438,9 @@ Acceptance:
 
 - [x] File HTML upload không nhúng raw vào App Router runtime.
 - [x] Storage path không lộ ra UI; route mở mô phỏng dùng signed URL ngắn hạn.
-- [x] Mô phỏng HTML upload cá nhân dùng ngay trong Thư viện cá nhân; upload gắn học phần cần Mod/Admin duyệt trước khi đưa vào học phần dùng chung.
+- [x] Mô phỏng HTML upload cá nhân dùng ngay trong Thư viện cá nhân; upload gắn học phần cần Mod duyệt trước khi đưa vào học phần dùng chung.
 - [x] Tài nguyên Thư viện được thêm/bớt khỏi Màn chiếu và Tủ tài liệu theo từng lớp, không cần duyệt.
-- [x] Giảng viên tìm/lọc tài nguyên theo danh mục hoặc tag; Mod/Admin quản lý danh sách danh mục.
+- [x] Giảng viên và Mod tìm/lọc tài nguyên theo danh mục hoặc tag; Admin quản lý danh sách danh mục.
 - [x] Workflow hiện tại phù hợp với file `_Mo_phong_VL6.html`; chuyển native vẫn cần refactor thủ công.
 
 ---
@@ -475,27 +475,28 @@ Ghi chu tien do Phase 6:
 - [x] Da co evidence local validation trong `PHASE6_LOCAL_VALIDATION_EVIDENCE_20260604.md`: app health pass, Supabase local reachable, integration pass, admin user-management/auth-profile pass; E2E browser automation bi chan boi `spawn EPERM`.
 - [x] Da them route `/library` lam hub Thu vien cho teacher/moderator/admin: tong hop tai lieu + simulation, link ve upload/registry, va review tich hop `_Mo_phong_VL6.html`.
 - [x] Da them workflow upload tai lieu/mo phong HTML trong Thu vien: bo trong hoc phan thi luu thu vien ca nhan; chon hoc phan thi gui yeu cau duyet vao Thu vien dung chung. Migration `202606070001_personal_library_upload_review.sql` bo sung `materials.review_status`, `materials.course_id` nullable va `simulation_uploads.requested_course_id`.
-- [x] Da them workflow `library_change_requests`: giang vien/Mod/Admin tao yeu cau an/xoa tai lieu/mo phong; Mod/Admin duyet an, chi Admin duyet xoa.
+- [x] Da them workflow `library_change_requests`: giang vien co the gui yeu cau an/xoa tai lieu/mo phong; Moderator co quyen an truc tiep tai nguyen dung chung, con yeu cau xoa van do Admin duyet hoac xu ly truc tiep.
 - [x] Da them workflow `class_resource_links`: giang vien/Mod/Admin them hoac bot tai lieu/mo phong theo tung lop tu Man chieu va Tu tai lieu.
+- [x] Da siet trang `Tài nguyên lớp học`: teacher chi nhin thay `Tài liệu dùng chung` va tai nguyen gan voi dung hoc phan cua lop hien tai.
 - [x] Da them metadata `library_categories` + `tags` cho tai lieu, mo phong va simulation upload; trang Thu vien co bo loc danh muc/tag cho giang vien/Mod/Admin.
 - [x] Da bo sung khoi `Thong bao` dung chung tren dashboard Admin/Mod/Giang vien; Admin va Mod duoc gui thong bao, Giang vien chi doc.
 - [x] Da bo sung module `Kiem tra` theo hoc phan: ngan hang de thi + kho tong hop ket qua kiem tra theo hoc phan.
 - [x] Da bo sung `Thu vien ca nhan` gan voi tai khoan giang vien, quota mac dinh 50 MB va Admin co the dieu chinh.
 - [x] Da doi huong tu `Auth` don thuan sang `User management` day du cho Admin: tao tai khoan giang vien, tao/cap quyen moderator, quan ly vai tro va truy cap.
 - [x] Da chuan hoa UI Thu vien giang vien: bo card tong quan Duyet xoa, them loc theo hoc phan, danh sach Tai lieu/Mo phong dung khung cuon co dinh, va form tai tai lieu/mo phong HTML dong bo thu tu truong + vi tri nut gui.
-- [x] Da chuan hoa UI Thu vien Mod/Admin: tong so mo phong dem theo widget duy nhat thay vi nhan theo hoc phan, form upload staff bat buoc chon hoc phan hoac Khac va dua thang vao Thu vien, cac label/input trong Danh muc va Duyet xoa/an co spacing rong hon.
+- [x] Da chuan hoa UI Thu vien Mod/Admin: tong so mo phong dem theo widget duy nhat thay vi nhan theo hoc phan; form upload staff ho tro `Tài liệu dùng chung`, Mod chi chon hoc phan minh quan ly, va khoi Duyet/xoa/an da chuyen sang thao tac truc tiep cho Mod.
 - [x] Da chinh quyen Admin trong Thu vien: Admin tich hop native truc tiep cho mo phong HTML, an/xoa tai nguyen truc tiep khong can tao yeu cau; Mod/giang vien van di qua luong de xuat/duyet phu hop.
-- [x] Da chinh UI Admin: dashboard hien `Tong quan quan tri`, Admin hub bo Tai tai lieu/Bai kiem tra, cac trang chuc nang co nut do `Khu vuc Admin`, danh sach lop Admin hien trang thai bang cham mau va thong tin tom tat, danh sach hoc phan Admin hien metadata day du + Mod quan ly va bo nut Tao/quan ly lop/Mo mo phong.
-- [x] Da bo sung thao tac Admin `Giao quan ly` trong danh sach hoc phan: Admin chon Mod active de gan quan ly, he thong cap scope course cho Mod moi va thu hoi scope course active cu; hoc phan do Mod tao qua yeu cau tao hoc phan van tu dong gan Mod tao yeu cau khi Admin duyet.
-- [x] Da chuan hoa UI Chuẩn đầu ra học phần va Thành phần đánh giá thanh bang nhap lieu co nut Them/Bot trong form tao/sua hoc phan cho Admin/Mod, dong thoi hien thi readonly dang bang trong card tom tat hoc phan.
-- [x] Da apply migration `202606070002_course_update_change_requests.sql` de luong Admin sua hoc phan da giao Mod quan ly tao yeu cau `update` va chi ap dung sau khi Mod dong thuan.
-- [x] Da them metadata hoc phan (`credits`, `knowledge_block`, `course_type`, `clo_items`, `assessment_components`) va workflow Mod tao hoc phan qua `course_change_requests` action `create`; Admin duyet se tao hoc phan active va cap scope mac dinh cho Mod tao yeu cau.
-- [x] Da chinh quyen Mod: Mod khong tao lop/khong quan ly bai kiem tra, chi xem Tong quan giam sat theo hoc phan duoc cap scope va duyet yeu cau thay doi lop/hoc phan trong pham vi phu hop.
+- [x] Da chinh UI Admin theo huong governance he thong: dashboard hien `Tong quan quan tri`, Admin hub tap trung vao User management va cac lien ket van hanh he thong; cac ghi chu lien quan den thao tac nghiep vu hoc phan cua Admin da duoc supersede boi policy hien hanh.
+- [x] Cac luong `Admin giao quan ly hoc phan`, `Admin sua hoc phan da giao Mod`, va cac note chuyen tiep tu workflow hoc phan cu da duoc supersede boi policy hien hanh: Mod toan quyen quan ly hoc phan truc tiep, Admin khong van hanh hoc phan.
+- [x] Da chuan hoa UI Chuẩn đầu ra học phần va Thành phần đánh giá thanh bang nhap lieu co nut Them/Bot trong form tao/sua hoc phan do Mod van hanh, dong thoi hien thi readonly dang bang trong card tom tat hoc phan.
+- [x] Migration lich su `202606070002_course_update_change_requests.sql` duoc giu lai cho tuong thich du lieu cu; workflow hoc phan hien hanh khong con bat Admin tao request `update`.
+- [x] Da them metadata hoc phan (`credits`, `knowledge_block`, `course_type`, `clo_items`, `assessment_components`) va chot lai luong Mod tao/sua/lưu trữ/xóa hoc phan truc tiep.
+- [x] Da chinh quyen Mod theo policy hien hanh: Mod khong tao lop, nhung van van hanh hoc phan, thu vien dung chung theo hoc phan va theo doi `Kết quả đánh giá học phần` sau khi giang vien `NỘP KẾT QUẢ`.
 - [x] Da fix luong test role local: Moderator scope nhin thay hoc phan/lop theo `can_manage_course/class`, hoc phan moi duoc seed widget mo phong mac dinh, va hoc phan A-Test da co lop A-Test de test them sinh vien/tai lieu/mo phong.
-- [x] Da bo sung UI sinh vien xin tham gia lop active tren `/my-classes`; yeu cau tham gia lop chi do giang vien phu trach lop duyet, con duyet truy cap van do giang vien/Mod/Admin xu ly theo quyen.
+- [x] Da bo sung UI sinh vien xin tham gia lop active tren `/my-classes`; yeu cau tham gia lop chi do giang vien phu trach lop duyet, co them co `duyet tu dong` o trang Quan ly lop; duyet truy cap van do giang vien/Mod/Admin xu ly theo quyen.
 - [x] Da nang cap `/admin` thanh admin hub co link den dashboard, hoc phan, lop hoc, Thu vien, tai lieu, bai kiem tra va scope.
-- [x] Da bo sung quyen xoa hoc phan admin-only tren UI/service; Mod/teacher khong thay nut xoa hoc phan.
-- [x] Da chot va dong bo lai ma tran quyen chinh: teacher chi gui yeu cau mo lop va tao bai kiem tra; Mod quan ly hoc phan/lop theo scope, khong tao lop va khong quan ly Danh muc Thu vien; Admin tao/quan ly hoc phan, giao Mod, quan ly Danh muc Thu vien va duyet native.
+- [x] Ghi chu lich su `admin-only delete course` da duoc supersede boi policy hien hanh: Mod la actor xoa/lưu trữ hoc phan, Admin khong van hanh hoc phan.
+- [x] Da chot va dong bo lai ma tran quyen chinh hien hanh: teacher gui yeu cau mo lop va tao bai kiem tra; Mod quan ly hoc phan, thu vien dung chung theo hoc phan va bang tong hop ket qua; Admin quan ly User management, quota, danh muc Thu vien, governance he thong va bao cao tong hop.
 - [x] Da them khung Kiem tra trong phong hoc ngay duoi Bang den, chi hien khi co assessment `open`; trang lam bai sinh vien co nut Bat dau lam bai va dong ho dem nguoc theo han nop.
 - [x] Da chuan hoa them module assessment hien co: `Thoi han lam bai` thay cho `Han nop`, dong ho `Thoi gian lam bai con lai` lay theo attempt cua tung sinh vien va luu state len database de chong trick refresh/relogin.
 - [x] Da cap nhat Result page cho bai kiem tra ngoai: bo filter khong can, them sort theo header, doi import/export sang quy uoc ro rang `Xuất kết quả kiểm tra` va `Xuất thống kê kết quả`, co template CSV/XLSX cho giang vien va doi chieu ket qua bang `student code`.
@@ -533,7 +534,7 @@ Ghi chu tong ket tien do:
 | RISK-006 | Local secret bị commit nhầm | Cao | `.env.local` luôn untracked + script `pnpm security:scan` quét tracked files |
 | RISK-007 | Test mặc định phụ thuộc Supabase local | Trung bình | `pnpm test` chỉ chạy unit, integration tách riêng `pnpm test:integration` tự start local stack |
 | RISK-008 | Thiếu browser E2E cho login/role redirect | Trung bình | Bổ sung Playwright test `tests/e2e/auth-flow.spec.ts` cho signup/login/logout/role redirect |
-| RISK-009 | Sinh viên tự đăng ký nhưng chưa có luồng duyệt rõ ràng | Cao | Thiết kế trạng thái truy cập + workflow duyệt ở Phase 3.3 |
+| RISK-009 | Trạng thái truy cập sinh viên lệch giữa account do Admin tạo và dữ liệu/luồng legacy | Cao | Giữ `access_status`/expiry rõ ràng, docs sweep định kỳ và test role-based lifecycle |
 | RISK-010 | Moderator có quyền vượt phạm vi lớp/học phần | Cao | Bắt buộc scope-based permission + audit log cấp quyền |
 | RISK-011 | Dữ liệu hồ sơ sinh viên phình to do trộn dữ liệu chi tiết | Trung bình | Tách profile nhẹ + summary table cho thống kê chung |
 
@@ -560,5 +561,5 @@ Một task chỉ được đánh dấu hoàn thành khi:
 
 ```text
 Current phase: Phase 6 operations polish
-Next task: Smoke test role Mod/Admin/Teacher sau migration `202606050004`, sau do execute cloud production rollout va rollback drill khi co credential/hosting target.
+Next task: Smoke test role Giám sát viên/Quản trị viên/Giảng viên sau cac migration user-management va assessment moi, sau do execute cloud production rollout va rollback drill khi co credential/hosting target.
 ```

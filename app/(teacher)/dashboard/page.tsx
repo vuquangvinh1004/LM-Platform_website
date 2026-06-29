@@ -1,7 +1,8 @@
 import { signOutAction } from "@/app/(auth)/login/actions";
 import { createGlobalNotificationAction, setGlobalNotificationExpiryAction } from "@/app/(teacher)/dashboard/actions";
 import Link from "next/link";
-import { AdminAreaLink } from "@/components/ui/admin-area-link";
+import { listLibrarySimulationUploadsRepository } from "@/lib/repositories/library-repository";
+import { listMaterialReviewStatusesRepository } from "@/lib/repositories/material-repository";
 import { requireRole } from "@/lib/services/auth-service";
 import { listClassChangeRequests } from "@/lib/services/class-service";
 import { getTeacherDashboard } from "@/lib/services/dashboard-service";
@@ -44,6 +45,17 @@ type PendingClassOpenNotice = {
   courseLabel: string;
   createdAt: string;
 };
+
+function isLegacyPendingLibraryNotice(title: string, message: string): boolean {
+  const normalizedTitle = title.trim().toLowerCase();
+  const normalizedMessage = message.trim().toLowerCase();
+
+  if (normalizedTitle !== "có tài liệu chờ duyệt" && normalizedTitle !== "có mô phỏng chờ duyệt") {
+    return false;
+  }
+
+  return normalizedMessage.includes("hãy vào thư viện để duyệt hoặc từ chối");
+}
 
 function getClassLabel(input: {
   classId?: string | null;
@@ -93,7 +105,7 @@ function buildStudentMessageNotice(input: {
 export default async function TeacherDashboardPage(
   { searchParams }: { searchParams: Promise<TeacherDashboardSearchParams> },
 ) {
-  const profileResult = await requireRole(["teacher", "moderator", "admin"]);
+  const profileResult = await requireRole(["teacher", "moderator"]);
 
   if (!profileResult.ok) {
     return (
@@ -139,16 +151,57 @@ export default async function TeacherDashboardPage(
   }
 
   const dashboard = dashboardResult.data;
-  const notifications = notificationsResult.ok ? notificationsResult.data : [];
+  let notifications = notificationsResult.ok ? notificationsResult.data : [];
   const isModerator = profileResult.data.role === "moderator";
-  const isAdmin = profileResult.data.role === "admin";
   const isTeacher = profileResult.data.role === "teacher";
+  notifications = notifications.filter((notification) => {
+    if (notification.kind === "announcement" && isLegacyPendingLibraryNotice(notification.title, notification.content)) {
+      return false;
+    }
+
+    return true;
+  });
+  const hasUploadRequestNotifications = notifications.some((notification) => notification.kind === "material_upload_request");
+  const pendingMaterialNotificationIds = notifications
+    .filter((notification) => notification.kind === "material_upload_request" && notification.relatedEntityType === "material" && notification.relatedEntityId)
+    .map((notification) => notification.relatedEntityId as string);
+  const pendingSimulationNotificationIds = notifications
+    .filter((notification) => notification.kind === "material_upload_request" && notification.relatedEntityType === "simulation_upload" && notification.relatedEntityId)
+    .map((notification) => notification.relatedEntityId as string);
+
+  if (hasUploadRequestNotifications) {
+    const [materialStatuses, simulationUploads] = await Promise.all([
+      pendingMaterialNotificationIds.length > 0 ? listMaterialReviewStatusesRepository(pendingMaterialNotificationIds) : Promise.resolve(new Map<string, string>()),
+      pendingSimulationNotificationIds.length > 0
+        ? listLibrarySimulationUploadsRepository({ actorId: profileResult.data.id, actorRole: profileResult.data.role })
+        : Promise.resolve([]),
+    ]);
+    const simulationStatusById = new Map(simulationUploads.map((upload) => [upload.id, upload.reviewStatus]));
+
+    notifications = notifications.filter((notification) => {
+      if (notification.kind !== "material_upload_request") {
+        return true;
+      }
+
+      if (!notification.relatedEntityType || !notification.relatedEntityId) {
+        return false;
+      }
+
+      if (notification.relatedEntityType === "material") {
+        return materialStatuses.get(notification.relatedEntityId) === "pending_review";
+      }
+
+      if (notification.relatedEntityType === "simulation_upload") {
+        return simulationStatusById.get(notification.relatedEntityId) === "pending_review";
+      }
+
+      return false;
+    });
+  }
   const pendingClassReviewRequestsResult = isTeacher
     ? { ok: true as const, data: [] }
     : await listClassChangeRequests(
-        isAdmin
-          ? { statuses: ["pending_review"], actions: ["create", "archive", "delete"] }
-          : { courseIds: dashboard.courses.map((course) => course.id), statuses: ["pending_review"] },
+        { courseIds: dashboard.courses.map((course) => course.id), statuses: ["pending_review"] },
       );
   const pendingClassOpenNotices: PendingClassOpenNotice[] = isTeacher && pendingClassRequestsResult.ok
     ? pendingClassRequestsResult.data.map((request) => {
@@ -176,9 +229,9 @@ export default async function TeacherDashboardPage(
       return {
         id: `review-${request.id}`,
         title: "Yêu cầu lớp đang chờ duyệt",
-        message: `${label} trong học phần ${matchedCourse ? `${matchedCourse.code} - ${matchedCourse.title}` : "chưa xác định"} đang chờ Mod/Admin xử lý.`,
+        message: `${label} trong học phần ${matchedCourse ? `${matchedCourse.code} - ${matchedCourse.title}` : "chưa xác định"} đang chờ GIÁM SÁT VIÊN/QUẢN TRỊ VIÊN xử lý.`,
         createdAt: request.createdAt,
-        createdByRole: isAdmin ? "admin" : "moderator",
+        createdByRole: "moderator",
         kind: "announcement",
         group: "class" as const,
         expiresAt: null,
@@ -263,8 +316,8 @@ export default async function TeacherDashboardPage(
     }),
     ...pendingClassOpenNotices.map((notice) => ({
       id: `class-open-${notice.requestId}`,
-      title: "Yêu cầu mở lớp đang chờ Mod/Admin duyệt",
-      message: `${notice.classCode} - ${notice.title} thuộc học phần ${notice.courseLabel} đã được gửi và đang chờ Mod hoặc Admin duyệt.`,
+      title: "Yêu cầu mở lớp đang chờ GIÁM SÁT VIÊN/QUẢN TRỊ VIÊN duyệt",
+      message: `${notice.classCode} - ${notice.title} thuộc học phần ${notice.courseLabel} đã được gửi và đang chờ GIÁM SÁT VIÊN hoặc QUẢN TRỊ VIÊN duyệt.`,
       createdAt: notice.createdAt,
       createdByRole: "teacher" as const,
       kind: "announcement" as const,
@@ -307,21 +360,18 @@ export default async function TeacherDashboardPage(
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">
-            {isAdmin ? "Tổng quan quản trị" : isModerator ? "Tổng quan giám sát" : "Tổng quan giảng viên"}
+            {isModerator ? "Tổng quan giám sát" : "Tổng quan giảng viên"}
           </h1>
           <p className="mt-2 text-sm text-slate-600">
-            {isAdmin
-              ? "Bảng tổng quan quản trị theo toàn hệ thống, gồm học phần, lớp học, sinh viên, bài kiểm tra và tỷ lệ hoàn thành."
-              : isModerator
-                ? "Thống kê theo các học phần được Admin phân quyền quản lý, bao gồm lớp học, sinh viên, bài kiểm tra và tỷ lệ hoàn thành."
-                : "Bảng tổng quan theo phạm vi hiện tại, bao gồm tỷ lệ hoàn thành và hoạt động gần đây."}
+            {isModerator
+              ? "Thống kê theo các học phần được Admin phân quyền quản lý, bao gồm lớp học, sinh viên, bài kiểm tra và hoạt động gần đây."
+              : "Bảng tổng quan theo phạm vi hiện tại, bao gồm lớp học, bài kiểm tra và hoạt động gần đây."}
           </p>
         </div>
-        {isAdmin ? <AdminAreaLink /> : null}
       </div>
 
       <section className="mt-5 rounded-lg border border-slate-200 bg-white p-4">
-        <form className="grid gap-3 md:grid-cols-3" method="get">
+        <form className={`grid gap-3 ${isModerator ? "md:grid-cols-2" : "md:grid-cols-3"}`} method="get">
           <label className="text-xs font-medium text-slate-700" htmlFor="courseId">
             Lọc theo học phần
             <select
@@ -339,22 +389,24 @@ export default async function TeacherDashboardPage(
             </select>
           </label>
 
-          <label className="text-xs font-medium text-slate-700" htmlFor="classId">
-            Lọc theo lớp học
-            <select
-              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm text-slate-800"
-              defaultValue={dashboard.selectedClassId ?? ""}
-              id="classId"
-              name="classId"
-            >
-              <option value="">Tất cả lớp học</option>
-              {visibleClassOptions.map((courseClass) => (
-                <option key={courseClass.id} value={courseClass.id}>
-                  {courseClass.classCode} - {courseClass.title}
-                </option>
-              ))}
-            </select>
-          </label>
+          {!isModerator ? (
+            <label className="text-xs font-medium text-slate-700" htmlFor="classId">
+              Lọc theo lớp học
+              <select
+                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm text-slate-800"
+                defaultValue={dashboard.selectedClassId ?? ""}
+                id="classId"
+                name="classId"
+              >
+                <option value="">Tất cả lớp học</option>
+                {visibleClassOptions.map((courseClass) => (
+                  <option key={courseClass.id} value={courseClass.id}>
+                    {courseClass.classCode} - {courseClass.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
 
           <div className="flex items-end gap-2">
             <button className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700" type="submit">
@@ -521,35 +573,6 @@ export default async function TeacherDashboardPage(
         </article>
       </section>
 
-      <section className="mt-6 rounded-lg border border-slate-200 bg-white p-4">
-        <h2 className="text-sm font-semibold text-slate-900">Tỷ lệ hoàn thành theo bài kiểm tra</h2>
-        {dashboard.completionSeries.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-500">Chưa có dữ liệu hoàn thành để hiển thị.</p>
-        ) : (
-          <div className="mt-3 space-y-3">
-            {dashboard.completionSeries.map((point) => (
-              <div key={point.assessmentId}>
-                <div className="mb-1 flex items-center justify-between text-xs text-slate-600">
-                  <span>{point.assessmentTitle}</span>
-                  <span>{point.completionRate}% ({point.completedCount}/{point.expectedCount}) | TB {point.averageScore}%</span>
-                </div>
-                <div
-                  aria-label={`Tỉ lệ hoàn thành ${point.assessmentTitle}: ${point.completionRate}%`}
-                  className="h-2 w-full overflow-hidden rounded bg-slate-100"
-                  role="img"
-                >
-                  <div
-                    className="h-full rounded bg-teal-600"
-                    style={{ width: `${Math.min(100, Math.max(0, point.completionRate))}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {!isAdmin ? (
       <div className="mt-4 flex flex-wrap gap-3">
         {!isTeacher ? (
           <Link className="inline-flex rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700" href="/courses">
@@ -560,26 +583,23 @@ export default async function TeacherDashboardPage(
           <Link className="inline-flex rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700" href="/classes">
             Quản lý lớp
           </Link>
-        ) : (
-          <Link className="inline-flex rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700" href="/classes">
-            Giám sát lớp
+        ) : null}
+        {isTeacher || isModerator ? (
+          <Link className="inline-flex rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700" href="/library">
+            Thư viện
           </Link>
-        )}
-        <Link className="inline-flex rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700" href="/library">
-          Thư viện
-        </Link>
+        ) : null}
         {!isModerator ? (
           <Link className="inline-flex rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700" href="/assessments">
             Quản lý bài kiểm tra
           </Link>
         ) : null}
-        {!isTeacher ? (
+        {!isTeacher && !isModerator ? (
           <Link className="inline-flex rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700" href="/access-review">
             Duyệt truy cập
           </Link>
         ) : null}
       </div>
-      ) : null}
       <form action={signOutAction} className="mt-6">
         <button className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700" type="submit">
           Đăng xuất

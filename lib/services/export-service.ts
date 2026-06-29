@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { getAssessmentSummaryRepository } from "@/lib/repositories/assessment-repository";
 import { getAssessmentResults } from "@/lib/services/submission-service";
 import type { ServiceResult } from "@/lib/types/service-result";
 import type { SubmissionSummary } from "@/lib/types/submission";
@@ -27,13 +28,14 @@ export type ExportAssessmentResultsTemplateOutput = {
   content: Buffer;
 };
 
-function toCsv(rows: SubmissionSummary[]): Buffer {
+function toCsv(rows: SubmissionSummary[], assessmentCloCodes: string[]): Buffer {
   return createCsvBuffer({
     headers: [
       "Mã sinh viên",
       "Họ tên sinh viên",
       "Email",
       "Điểm",
+      ...assessmentCloCodes,
       "Nộp lúc",
       "Nguồn",
       "Ghi chú",
@@ -43,6 +45,7 @@ function toCsv(rows: SubmissionSummary[]): Buffer {
       row.studentFullName,
       row.studentEmail,
       row.rawScore,
+      ...assessmentCloCodes.map((cloCode) => row.cloScores?.[cloCode]),
       row.submittedAt,
       row.sourceLabel ?? row.source,
       row.note,
@@ -106,29 +109,31 @@ function toXlsx(rows: SubmissionSummary[]): Buffer {
   });
 }
 
-function buildImportTemplateRows() {
+function buildImportTemplateRows(assessmentCloCodes: string[]) {
   return [
-    {
-      "Mã sinh viên": "STU123",
-      "Họ tên sinh viên": "Nguyễn Văn A",
-      Email: "stu123@student.stu.edu.vn",
-      "Điểm": 8,
-      "Nộp lúc": "5/26/2026 12:00",
-      "Nguồn": "Google Form",
-      "Ghi chú": "Ví dụ nhập từ biểu mẫu ngoài",
-    },
+    Object.fromEntries([
+      ["Mã sinh viên", "STU123"],
+      ["Họ tên sinh viên", "Nguyễn Văn A"],
+      ["Email", "stu123@student.stu.edu.vn"],
+      ["Điểm", 8],
+      ...assessmentCloCodes.map((cloCode, index) => [cloCode, 7 + index]),
+      ["Nộp lúc", "5/26/2026 12:00"],
+      ["Nguồn", "Google Form"],
+      ["Ghi chú", "Ví dụ nhập từ biểu mẫu ngoài"],
+    ]) as Record<string, string | number>,
   ];
 }
 
-function toTemplateCsv(): Buffer {
-  const rows = buildImportTemplateRows();
+function toTemplateCsv(assessmentCloCodes: string[]): Buffer {
+  const rows = buildImportTemplateRows(assessmentCloCodes);
   return createCsvBuffer({
-    headers: ["Mã sinh viên", "Họ tên sinh viên", "Email", "Điểm", "Nộp lúc", "Nguồn", "Ghi chú"],
+    headers: ["Mã sinh viên", "Họ tên sinh viên", "Email", "Điểm", ...assessmentCloCodes, "Nộp lúc", "Nguồn", "Ghi chú"],
     rows: rows.map((row) => [
       row["Mã sinh viên"],
       row["Họ tên sinh viên"],
       row.Email,
       row["Điểm"],
+      ...assessmentCloCodes.map((cloCode) => row[cloCode]),
       row["Nộp lúc"],
       row["Nguồn"],
       row["Ghi chú"],
@@ -136,26 +141,32 @@ function toTemplateCsv(): Buffer {
   });
 }
 
-function toTemplateXlsx(): Buffer {
+function toTemplateXlsx(assessmentCloCodes: string[]): Buffer {
   return createWorkbookBuffer({
     sheetName: "template",
-    rows: buildImportTemplateRows(),
+    rows: buildImportTemplateRows(assessmentCloCodes),
   });
 }
 
-export function exportAssessmentResultsImportTemplate(format: "csv" | "xlsx"): ExportAssessmentResultsTemplateOutput {
-  if (format === "csv") {
+export function exportAssessmentResultsImportTemplate(input: {
+  format: "csv" | "xlsx";
+  assessmentCloCodes?: string[];
+} | "csv" | "xlsx"): ExportAssessmentResultsTemplateOutput {
+  const normalizedInput = typeof input === "string" ? { format: input, assessmentCloCodes: [] } : input;
+  const assessmentCloCodes = normalizedInput.assessmentCloCodes ?? [];
+
+  if (normalizedInput.format === "csv") {
     return {
       fileName: "assessment-results-import-template.csv",
       contentType: "text/csv; charset=utf-8",
-      content: toTemplateCsv(),
+      content: toTemplateCsv(assessmentCloCodes),
     };
   }
 
   return {
     fileName: "assessment-results-import-template.xlsx",
     contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    content: toTemplateXlsx(),
+    content: toTemplateXlsx(assessmentCloCodes),
   };
 }
 
@@ -192,6 +203,8 @@ export async function exportAssessmentResults(
   let currentPage = 1;
   let totalPages = 1;
   const allRows: SubmissionSummary[] = [];
+  const assessmentSummary = await getAssessmentSummaryRepository(parsedInput.data.assessmentId);
+  const assessmentCloCodes = assessmentSummary?.assessmentCloCodes ?? [];
 
   while (currentPage <= totalPages) {
     const pageResult = await getAssessmentResults({
@@ -222,7 +235,7 @@ export async function exportAssessmentResults(
       data: {
         fileName: `assessment-results-${parsedInput.data.assessmentId}-${timestamp}.csv`,
         contentType: "text/csv; charset=utf-8",
-        content: toCsv(allRows),
+        content: toCsv(allRows, assessmentCloCodes),
       },
     };
   }

@@ -21,6 +21,7 @@ export type CreateClassRepositoryInput = {
   semester?: string;
   academicYear?: string;
   status: "draft" | "active" | "archived";
+  isOpenForEnrollment: boolean;
 };
 
 export type FindManageableCourseRepositoryInput = {
@@ -77,6 +78,7 @@ type ClassChangeRequestRow = {
   semester: string | null;
   academic_year: string | null;
   requested_status: "draft" | "active" | "archived" | null;
+  requested_open_for_enrollment: boolean | null;
   status: "pending_review" | "approved" | "rejected";
   reason: string | null;
   review_note: string | null;
@@ -133,6 +135,16 @@ export type ListClassMembersByClassIdsRepositoryInput = {
   classIds: string[];
 };
 
+export type UpdateClassPublicEnrollmentVisibilityRepositoryInput = {
+  classId: string;
+  isOpenForEnrollment: boolean;
+};
+
+export type UpdateClassAutoApproveEnrollmentRepositoryInput = {
+  classId: string;
+  autoApproveEnrollment: boolean;
+};
+
 function mapClassRow(row: {
   id: string;
   course_id: string;
@@ -142,6 +154,8 @@ function mapClassRow(row: {
   semester: string | null;
   academic_year: string | null;
   status: "draft" | "active" | "archived";
+  is_open_for_enrollment: boolean;
+  auto_approve_enrollment: boolean;
   created_at: string;
   updated_at: string;
   course?: { code: string; title: string } | { code: string; title: string }[] | null;
@@ -159,6 +173,8 @@ function mapClassRow(row: {
     semester: row.semester,
     academicYear: row.academic_year,
     status: row.status,
+    isOpenForEnrollment: row.is_open_for_enrollment,
+    autoApproveEnrollment: row.auto_approve_enrollment,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -200,6 +216,7 @@ function mapClassChangeRequestRow(row: ClassChangeRequestRow): ClassChangeReques
     semester: row.semester,
     academicYear: row.academic_year,
     requestedStatus: row.requested_status,
+    requestedOpenForEnrollment: row.requested_open_for_enrollment,
     status: row.status,
     reason: row.reason,
     reviewNote: row.review_note,
@@ -226,7 +243,7 @@ export async function listClassesForUserRepository(
     let query = supabase
       .from("classes")
       .select(
-      "id,course_id,teacher_id,class_code,title,semester,academic_year,status,created_at,updated_at,course:courses(code,title)",
+      "id,course_id,teacher_id,class_code,title,semester,academic_year,status,is_open_for_enrollment,auto_approve_enrollment,created_at,updated_at,course:courses(code,title)",
       { count: "exact" },
     )
     .order("created_at", { ascending: false })
@@ -255,7 +272,7 @@ export async function listClassesForUserRepository(
   const { data, error, count } = await supabase
     .from("class_members")
     .select(
-      "id,status,joined_at,class:classes(id,course_id,teacher_id,class_code,title,semester,academic_year,status,created_at,updated_at,course:courses(code,title))",
+      "id,status,joined_at,class:classes(id,course_id,teacher_id,class_code,title,semester,academic_year,status,is_open_for_enrollment,auto_approve_enrollment,created_at,updated_at,course:courses(code,title))",
       { count: "exact" },
     )
     .eq("student_id", input.actorId)
@@ -336,9 +353,11 @@ export async function createClassRepository(input: CreateClassRepositoryInput): 
       semester: input.semester ?? null,
       academic_year: input.academicYear ?? null,
       status: input.status,
+      is_open_for_enrollment: input.isOpenForEnrollment,
+      auto_approve_enrollment: false,
     })
     .select(
-      "id,course_id,teacher_id,class_code,title,semester,academic_year,status,created_at,updated_at,course:courses(code,title)",
+      "id,course_id,teacher_id,class_code,title,semester,academic_year,status,is_open_for_enrollment,auto_approve_enrollment,created_at,updated_at,course:courses(code,title)",
     )
     .single();
 
@@ -367,7 +386,7 @@ export async function listClassesByIdsRepository(classIds: string[]): Promise<Co
 
   const { data, error } = await supabase
     .from("classes")
-    .select("id,course_id,teacher_id,class_code,title,semester,academic_year,status,created_at,updated_at,course:courses(code,title)")
+    .select("id,course_id,teacher_id,class_code,title,semester,academic_year,status,is_open_for_enrollment,auto_approve_enrollment,created_at,updated_at,course:courses(code,title)")
     .in("id", classIds)
     .returns<Array<Parameters<typeof mapClassRow>[0]>>();
 
@@ -376,6 +395,34 @@ export async function listClassesByIdsRepository(classIds: string[]): Promise<Co
   }
 
   return (data ?? []).map(mapClassRow);
+}
+
+export async function updateClassPublicEnrollmentVisibilityRepository(
+  input: UpdateClassPublicEnrollmentVisibilityRepositoryInput,
+): Promise<void> {
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase
+    .from("classes")
+    .update({ is_open_for_enrollment: input.isOpenForEnrollment })
+    .eq("id", input.classId);
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function updateClassAutoApproveEnrollmentRepository(
+  input: UpdateClassAutoApproveEnrollmentRepositoryInput,
+): Promise<void> {
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase
+    .from("classes")
+    .update({ auto_approve_enrollment: input.autoApproveEnrollment })
+    .eq("id", input.classId);
+
+  if (error) {
+    throw error;
+  }
 }
 
 /**
@@ -575,7 +622,7 @@ export async function listClassChangeRequestsRepository(
   let query = supabase
     .from("class_change_requests")
     .select(
-      "id,action,target_class_id,course_id,class_code,title,semester,academic_year,requested_status,status,reason,review_note,requested_by,requested_by_profile:profiles!class_change_requests_requested_by_fkey(full_name),reviewed_by,reviewed_by_profile:profiles!class_change_requests_reviewed_by_fkey(full_name),reviewed_at,created_at",
+      "id,action,target_class_id,course_id,class_code,title,semester,academic_year,requested_status,requested_open_for_enrollment,status,reason,review_note,requested_by,requested_by_profile:profiles!class_change_requests_requested_by_fkey(full_name),reviewed_by,reviewed_by_profile:profiles!class_change_requests_reviewed_by_fkey(full_name),reviewed_at,created_at",
     )
     .order("created_at", { ascending: false })
     .limit(100);
@@ -624,12 +671,13 @@ export async function createClassCreateRequestRepository(input: CreateClassRepos
       semester: input.semester ?? null,
       academic_year: input.academicYear ?? null,
       requested_status: input.status,
+      requested_open_for_enrollment: input.isOpenForEnrollment,
       requested_by: input.requestedBy,
       reason: input.reason ?? null,
       status: "pending_review",
     })
     .select(
-      "id,action,target_class_id,course_id,class_code,title,semester,academic_year,requested_status,status,reason,review_note,requested_by,requested_by_profile:profiles!class_change_requests_requested_by_fkey(full_name),reviewed_by,reviewed_by_profile:profiles!class_change_requests_reviewed_by_fkey(full_name),reviewed_at,created_at",
+      "id,action,target_class_id,course_id,class_code,title,semester,academic_year,requested_status,requested_open_for_enrollment,status,reason,review_note,requested_by,requested_by_profile:profiles!class_change_requests_requested_by_fkey(full_name),reviewed_by,reviewed_by_profile:profiles!class_change_requests_reviewed_by_fkey(full_name),reviewed_at,created_at",
     )
     .single();
 
@@ -659,7 +707,7 @@ export async function createClassLifecycleRequestRepository(input: {
       status: "pending_review",
     })
     .select(
-      "id,action,target_class_id,course_id,class_code,title,semester,academic_year,requested_status,status,reason,review_note,requested_by,requested_by_profile:profiles!class_change_requests_requested_by_fkey(full_name),reviewed_by,reviewed_by_profile:profiles!class_change_requests_reviewed_by_fkey(full_name),reviewed_at,created_at",
+      "id,action,target_class_id,course_id,class_code,title,semester,academic_year,requested_status,requested_open_for_enrollment,status,reason,review_note,requested_by,requested_by_profile:profiles!class_change_requests_requested_by_fkey(full_name),reviewed_by,reviewed_by_profile:profiles!class_change_requests_reviewed_by_fkey(full_name),reviewed_at,created_at",
     )
     .single();
 
@@ -675,7 +723,7 @@ export async function getClassChangeRequestByIdRepository(requestId: string): Pr
   const { data, error } = await supabase
     .from("class_change_requests")
     .select(
-      "id,action,target_class_id,course_id,class_code,title,semester,academic_year,requested_status,status,reason,review_note,requested_by,requested_by_profile:profiles!class_change_requests_requested_by_fkey(full_name),reviewed_by,reviewed_by_profile:profiles!class_change_requests_reviewed_by_fkey(full_name),reviewed_at,created_at",
+      "id,action,target_class_id,course_id,class_code,title,semester,academic_year,requested_status,requested_open_for_enrollment,status,reason,review_note,requested_by,requested_by_profile:profiles!class_change_requests_requested_by_fkey(full_name),reviewed_by,reviewed_by_profile:profiles!class_change_requests_reviewed_by_fkey(full_name),reviewed_at,created_at",
     )
     .eq("id", requestId)
     .maybeSingle();
@@ -704,7 +752,7 @@ export async function reviewClassChangeRequestRepository(input: {
     })
     .eq("id", input.requestId)
     .select(
-      "id,action,target_class_id,course_id,class_code,title,semester,academic_year,requested_status,status,reason,review_note,requested_by,requested_by_profile:profiles!class_change_requests_requested_by_fkey(full_name),reviewed_by,reviewed_by_profile:profiles!class_change_requests_reviewed_by_fkey(full_name),reviewed_at,created_at",
+      "id,action,target_class_id,course_id,class_code,title,semester,academic_year,requested_status,requested_open_for_enrollment,status,reason,review_note,requested_by,requested_by_profile:profiles!class_change_requests_requested_by_fkey(full_name),reviewed_by,reviewed_by_profile:profiles!class_change_requests_reviewed_by_fkey(full_name),reviewed_at,created_at",
     )
     .maybeSingle();
 
@@ -727,6 +775,7 @@ export async function applyApprovedClassChangeRequestRepository(request: ClassCh
       semester: request.semester,
       academic_year: request.academicYear,
       status: request.requestedStatus ?? "active",
+      is_open_for_enrollment: request.requestedOpenForEnrollment ?? false,
     });
 
     if (error) {

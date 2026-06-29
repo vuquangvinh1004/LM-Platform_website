@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
@@ -13,23 +13,25 @@ import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/types/auth";
 import type { AssessmentSummary } from "@/lib/types/assessment";
 import type { CourseClassSummary } from "@/lib/types/class";
-import type { CourseAssessmentResultItem, QuestionBankItem } from "@/lib/types/question-bank";
+import type { CourseAssessmentComponent, CourseCloItem } from "@/lib/types/course";
+import type { QuestionBankItem } from "@/lib/types/question-bank";
 
 type AssessmentManagementClientProps = {
   actorRole: UserRole;
   classes: CourseClassSummary[];
+  courseMetadata: Array<{
+    courseId: string;
+    courseCode: string;
+    courseTitle: string;
+    cloItems: CourseCloItem[];
+    assessmentComponents: CourseAssessmentComponent[];
+  }>;
   assessments: AssessmentSummary[];
   questionBankByCourse: Array<{
     courseId: string;
     courseCode: string;
     courseTitle: string;
     items: QuestionBankItem[];
-  }>;
-  courseAssessmentResults: Array<{
-    courseId: string;
-    courseCode: string;
-    courseTitle: string;
-    items: CourseAssessmentResultItem[];
   }>;
 };
 
@@ -57,6 +59,13 @@ const embedModeLabels: Record<string, string> = {
   iframe: "Nhúng trong trang",
   new_tab: "Mở tab mới",
   disabled: "Tắt truy cập",
+};
+
+const assessmentComponentTypeLabels: Record<string, string> = {
+  diagnostic: "Chẩn đoán",
+  frequent: "Thường xuyên",
+  periodic: "Định kỳ",
+  final: "Tổng kết",
 };
 
 const questionTypeLabels: Record<string, string> = {
@@ -130,9 +139,9 @@ function AssessmentDeleteSubmitButton() {
 export function AssessmentManagementClient({
   actorRole,
   classes,
+  courseMetadata,
   assessments,
   questionBankByCourse,
-  courseAssessmentResults,
 }: AssessmentManagementClientProps) {
   const [createState, createAction, isPending] = useActionState(createAssessmentAction, initialAssessmentActionState);
   const [questionBankState, questionBankAction, isQuestionBankPending] = useActionState(
@@ -157,15 +166,16 @@ export function AssessmentManagementClient({
   useRefreshOnSuccess({ status: deleteState.status });
 
   const selectedCourseId = selectedClassPair.split("::")[1] ?? "";
+  const selectedCourseMetadata = courseMetadata.find((course) => course.courseId === selectedCourseId);
+  const selectedAssessmentComponents = selectedCourseMetadata?.assessmentComponents ?? [];
   const selectedQuestionBankItems = questionBankByCourse.find((bundle) => bundle.courseId === selectedCourseId)?.items ?? [];
-  const assessmentById = useMemo(
-    () => new Map(assessments.map((assessment) => [assessment.id, assessment])),
-    [assessments],
-  );
-  const classById = useMemo(
-    () => new Map(classes.map((courseClass) => [courseClass.id, courseClass])),
-    [classes],
-  );
+  const [selectedAssessmentComponentType, setSelectedAssessmentComponentType] = useState("");
+
+  useEffect(() => {
+    if (!selectedAssessmentComponents.some((component) => component.type === selectedAssessmentComponentType)) {
+      setSelectedAssessmentComponentType(selectedAssessmentComponents[0]?.type ?? "");
+    }
+  }, [selectedAssessmentComponentType, selectedAssessmentComponents]);
 
   return (
     <div className="space-y-8">
@@ -195,6 +205,11 @@ export function AssessmentManagementClient({
                       Hình thức: {deliveryModeLabels[assessment.deliveryMode] ?? assessment.deliveryMode} | Nguồn:{" "}
                       {providerLabels[assessment.provider] ?? assessment.provider} | Cách mở: {embedModeLabels[assessment.embedMode] ?? assessment.embedMode} | Trạng thái:{" "}
                       {assessmentStatusLabels[currentStatus] ?? currentStatus}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Thành phần: {assessment.assessmentComponentType ? assessmentComponentTypeLabels[assessment.assessmentComponentType] ?? assessment.assessmentComponentType : "-"}
+                      {" | "}
+                      CLO: {(assessment.assessmentCloCodes ?? []).length > 0 ? (assessment.assessmentCloCodes ?? []).join(", ") : "-"}
                     </p>
                     <div className="mt-3 grid gap-2 text-sm text-slate-700 md:grid-cols-2 xl:grid-cols-4">
                       <div className="rounded-md bg-slate-50 px-3 py-2">
@@ -318,6 +333,24 @@ export function AssessmentManagementClient({
           </label>
 
           <label className="text-sm text-slate-700">
+            Thành phần
+            <select
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              name="assessmentComponentType"
+              onChange={(event) => setSelectedAssessmentComponentType(event.target.value)}
+              required
+              value={selectedAssessmentComponentType}
+            >
+              <option value="">Chọn thành phần đánh giá</option>
+              {selectedAssessmentComponents.map((component) => (
+                <option key={component.type} value={component.type}>
+                  {assessmentComponentTypeLabels[component.type]} ({component.weight}%)
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="text-sm text-slate-700">
             Nguồn biểu mẫu
             {deliveryMode === "internal" ? (
               <>
@@ -341,6 +374,33 @@ export function AssessmentManagementClient({
               </>
             )}
           </label>
+
+          <div className="rounded-md border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700">
+            <p className="font-medium text-slate-900">CLO áp dụng cho bài kiểm tra</p>
+            {selectedAssessmentComponentType ? (
+              (() => {
+                const selectedComponent = selectedAssessmentComponents.find((component) => component.type === selectedAssessmentComponentType);
+                const cloCodes = selectedComponent?.cloCodes ?? [];
+
+                return cloCodes.length > 0 ? (
+                  <>
+                    <input name="assessmentCloCodes" type="hidden" value={JSON.stringify(cloCodes)} />
+                    <p className="mt-2">{cloCodes.join(", ")}</p>
+                  </>
+                ) : (
+                  <>
+                    <input name="assessmentCloCodes" type="hidden" value="[]" />
+                    <p className="mt-2 text-slate-500">Thành phần này hiện chưa gắn CLO nào ở học phần.</p>
+                  </>
+                );
+              })()
+            ) : (
+              <>
+                <input name="assessmentCloCodes" type="hidden" value="[]" />
+                <p className="mt-2 text-slate-500">Chọn lớp và thành phần để hệ thống tự hiển thị các CLO tương ứng.</p>
+              </>
+            )}
+          </div>
 
           {deliveryMode === "internal" ? (
             <input name="formUrl" type="hidden" value="" />
@@ -470,53 +530,6 @@ export function AssessmentManagementClient({
           {deleteState.message}
         </p>
       ) : null}
-
-      <section className="rounded-lg border border-slate-200 bg-white p-5">
-        <h2 className="text-lg font-semibold text-slate-900">Kho kết quả kiểm tra theo học phần</h2>
-        <p className="mt-2 text-sm text-slate-600">
-          Kết quả từ các lớp được tổng hợp theo học phần để lưu trữ tập trung và đối chiếu về sau.
-        </p>
-        <div className="mt-4 space-y-4">
-          {courseAssessmentResults.map((course) => (
-            <article className="rounded-lg border border-slate-200 p-4" key={course.courseId}>
-              <h3 className="font-semibold text-slate-900">{course.courseCode} - {course.courseTitle}</h3>
-              {course.items.length === 0 ? (
-                <p className="mt-2 text-sm text-slate-500">Chưa có kết quả nào được tổng hợp cho học phần này.</p>
-              ) : (
-                <div className="mt-3 overflow-x-auto">
-                  <table className="min-w-full divide-y divide-slate-200 text-sm">
-                    <thead className="bg-slate-50 text-slate-700">
-                      <tr>
-                        <th className="px-3 py-2 text-left font-medium">Sinh viên</th>
-                        <th className="px-3 py-2 text-left font-medium">Lớp</th>
-                        <th className="px-3 py-2 text-left font-medium">Bài kiểm tra</th>
-                        <th className="px-3 py-2 text-left font-medium">Điểm</th>
-                        <th className="px-3 py-2 text-left font-medium">Trạng thái</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {course.items.slice(0, 10).map((item) => {
-                        const assessment = assessmentById.get(item.assessmentId);
-                        const courseClass = classById.get(item.classId);
-
-                        return (
-                          <tr key={item.id}>
-                            <td className="px-3 py-2 text-slate-700">{item.studentIdentifier}</td>
-                            <td className="px-3 py-2 text-slate-700">{courseClass?.classCode ?? item.classId}</td>
-                            <td className="px-3 py-2 text-slate-700">{assessment?.title ?? item.assessmentId}</td>
-                            <td className="px-3 py-2 text-slate-700">{item.rawScore ?? "-"}{item.maxScore ? ` / ${item.maxScore}` : ""}</td>
-                            <td className="px-3 py-2 text-slate-700">{item.status}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </article>
-          ))}
-        </div>
-      </section>
 
       {actorRole === "teacher" || actorRole === "moderator" || actorRole === "admin" ? (
         <section className="rounded-lg border border-slate-200 bg-white p-5">

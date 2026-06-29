@@ -25,7 +25,7 @@ export function resolveLibraryCourseId(rawCourseId: FormDataEntryValue | null, a
   }
 
   if (actorRole !== "teacher" && !courseId) {
-    throw new Error("Mod/Admin cần chọn học phần hoặc Khác khi tải tài nguyên lên Thư viện.");
+    throw new Error("GIÁM SÁT VIÊN/QUẢN TRỊ VIÊN cần chọn một học phần khi tải tài nguyên lên Thư viện.");
   }
 
   return courseId || undefined;
@@ -98,7 +98,7 @@ export async function uploadSimulationPackageCommand(input: {
     ok: true,
     message:
       registerResult.data.reviewStatus === "pending_review"
-        ? `Mô phỏng ${registerResult.data.title} đã được tải lên và đang chờ Mod/Admin duyệt vào Thư viện dùng chung.`
+        ? `Mô phỏng ${registerResult.data.title} đã được tải lên và đang chờ GIÁM SÁT VIÊN/QUẢN TRỊ VIÊN duyệt vào Thư viện dùng chung.`
         : input.actorRole === "teacher"
           ? `Mô phỏng ${registerResult.data.title} đã được tải lên Thư viện cá nhân.`
           : `Mô phỏng ${registerResult.data.title} đã được tải thẳng vào Thư viện.`,

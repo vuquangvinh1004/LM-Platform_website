@@ -23,22 +23,31 @@ const signInSchema = z.object({
   password: z.string().min(5, "Mật khẩu tối thiểu 5 ký tự."),
 });
 
-const signUpSchema = z.object({
-  email: z.email("Email không hợp lệ."),
-  password: z.string().min(5, "Mật khẩu tối thiểu 5 ký tự."),
-  fullName: z.string().trim().min(2, "Họ tên tối thiểu 2 ký tự."),
-  role: z.literal("student"),
-  studentCode: z.string().trim().max(50).optional(),
-});
-
-function resolveLoginEmail(input: string): string {
+async function resolveLoginEmail(input: string): Promise<string> {
   const normalizedInput = input.trim();
 
   if (normalizedInput.toLowerCase() === ADMIN_LOGIN_ALIAS) {
     return LOCAL_LOGIN_ALIASES.admin;
   }
 
-  return LOCAL_LOGIN_ALIASES[normalizedInput.toLowerCase()] ?? normalizedInput;
+  const aliasMatch = LOCAL_LOGIN_ALIASES[normalizedInput.toLowerCase()];
+
+  if (aliasMatch) {
+    return aliasMatch;
+  }
+
+  if (normalizedInput.includes("@")) {
+    return normalizedInput;
+  }
+
+  const serviceRoleClient = createServiceRoleSupabaseClient();
+  const { data: matchedProfile } = await serviceRoleClient
+    .from("profiles")
+    .select("email")
+    .or(`student_code.eq.${normalizedInput},role_code.eq.${normalizedInput}`)
+    .maybeSingle<{ email: string | null }>();
+
+  return matchedProfile?.email ?? normalizedInput;
 }
 
 async function ensureLocalAdminAccount(): Promise<void> {
@@ -122,7 +131,7 @@ export async function signInWithPasswordAction(
   }
 
   const supabase = await createServerSupabaseClient();
-  const loginEmail = resolveLoginEmail(payload.data.email);
+  const loginEmail = await resolveLoginEmail(payload.data.email);
 
   let { data, error } = await supabase.auth.signInWithPassword({
     email: loginEmail,
@@ -216,76 +225,11 @@ export async function signInWithPasswordAction(
  */
 export async function signUpWithPasswordAction(
   _prevState: AuthActionState,
-  formData: FormData,
+  _formData: FormData,
 ): Promise<AuthActionState> {
-  const payload = signUpSchema.safeParse({
-    email: formData.get("email"),
-    password: formData.get("password"),
-    fullName: formData.get("fullName"),
-    role: formData.get("role"),
-    studentCode: formData.get("studentCode"),
-  });
-
-  if (!payload.success) {
-    return {
-      status: "error",
-      message: payload.error.issues[0]?.message ?? "Dữ liệu đăng ký không hợp lệ.",
-    };
-  }
-
-  const supabase = await createServerSupabaseClient();
-  if (!payload.data.studentCode) {
-    return {
-      status: "error",
-      message: "Vui lòng nhập mã số sinh viên.",
-    };
-  }
-
-  const { data, error } = await supabase.auth.signUp({
-    email: payload.data.email,
-    password: payload.data.password,
-    options: {
-      data: {
-        full_name: payload.data.fullName,
-        role: payload.data.role,
-        student_code: payload.data.studentCode,
-      },
-    },
-  });
-
-  if (error) {
-    return {
-      status: "error",
-      message: "Đăng ký thất bại. Email có thể đã tồn tại.",
-    };
-  }
-
-  if (data.user?.id) {
-    const serviceRoleClient = createServiceRoleSupabaseClient();
-    const { error: profileError } = await serviceRoleClient.from("profiles").upsert(
-      {
-        id: data.user.id,
-        email: payload.data.email,
-        full_name: payload.data.fullName,
-        role: "student",
-        status: "active",
-        access_status: "pending_approval",
-        student_code: payload.data.studentCode,
-      },
-      { onConflict: "id" },
-    );
-
-    if (profileError) {
-      return {
-        status: "error",
-        message: "Đăng ký Auth thành công nhưng không thể lưu mã số sinh viên. Vui lòng thử lại bằng MSSV khác.",
-      };
-    }
-  }
-
   return {
-    status: "success",
-    message: "Đăng ký sinh viên thành công. Tài khoản sẽ chờ duyệt truy cập theo quy trình hiện hành.",
+    status: "error",
+    message: "Tự đăng ký hiện đang tạm khóa. Vui lòng liên hệ Admin để được tạo tài khoản.",
   };
 }
 

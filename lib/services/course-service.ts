@@ -1,11 +1,8 @@
 import {
   archiveCourseRepository,
   assignCourseModeratorRepository,
-  applyApprovedCourseChangeRequestRepository,
   assignCourseTeachersRepository,
   createCourseChangeRequestRepository,
-  createCourseCreateRequestRepository,
-  createCourseUpdateRequestRepository,
   createCourseRepository,
   deleteCourseRepository,
   getCourseDeletionBlockersRepository,
@@ -224,46 +221,18 @@ export async function createCourse(input: CreateCourseInput): Promise<ServiceRes
     };
   }
 
-  if (parsedInput.data.actorRole === "teacher" || parsedInput.data.actorRole === "student") {
+  if (parsedInput.data.actorRole !== "moderator") {
     return {
       ok: false,
       error: {
         code: "FORBIDDEN",
-        message: "Chỉ Mod/Admin được khởi tạo học phần.",
+        message: "Chỉ Giám sát viên được khởi tạo học phần.",
       },
     };
   }
 
   try {
-    if (parsedInput.data.actorRole === "moderator") {
-      const request = await createCourseCreateRequestRepository({
-        requestedBy: parsedInput.data.ownerId,
-        code: parsedInput.data.code,
-        title: parsedInput.data.title,
-        description: parsedInput.data.description,
-        visibility: parsedInput.data.visibility,
-        credits: parsedInput.data.credits,
-        knowledgeBlock: parsedInput.data.knowledgeBlock,
-        courseType: parsedInput.data.courseType,
-        cloItems: parsedInput.data.cloItems,
-        assessmentComponents: parsedInput.data.assessmentComponents,
-      });
-
-      return {
-        ok: true,
-        data: request,
-      };
-    }
-
     const createdCourse = await createCourseRepository(parsedInput.data);
-
-    if (parsedInput.data.actorRole === "admin") {
-      await assignCourseTeachersRepository({
-        courseId: createdCourse.id,
-        teacherIds: parsedInput.data.assignedTeacherIds ?? [],
-        grantedBy: parsedInput.data.ownerId,
-      });
-    }
 
     await seedDefaultSimulationWidgetsForCourseRepository(createdCourse.id);
 
@@ -319,7 +288,7 @@ export async function updateCourse(input: UpdateCourseInput): Promise<ServiceRes
 
   const normalizedInput = parsedInput.data;
 
-  if (normalizedInput.actorRole !== "teacher" && normalizedInput.actorRole !== "admin" && normalizedInput.actorRole !== "moderator") {
+  if (normalizedInput.actorRole !== "moderator") {
     return {
       ok: false,
       error: {
@@ -339,34 +308,6 @@ export async function updateCourse(input: UpdateCourseInput): Promise<ServiceRes
           code: "NOT_FOUND",
           message: "Không tìm thấy học phần để cập nhật hoặc bạn không được phép sửa.",
         },
-      };
-    }
-
-    if (
-      normalizedInput.actorRole === "admin" &&
-      currentCourse.ownerRole === "moderator" &&
-      currentCourse.ownerId !== normalizedInput.actorId
-    ) {
-      const request = await createCourseUpdateRequestRepository({
-        targetCourseId: currentCourse.id,
-        requestedBy: normalizedInput.actorId,
-        assignedModeratorId: currentCourse.ownerId,
-        codeSnapshot: currentCourse.code,
-        titleSnapshot: currentCourse.title,
-        title: normalizedInput.title,
-        description: normalizedInput.description,
-        visibility: normalizedInput.visibility,
-        status: normalizedInput.status,
-        credits: normalizedInput.credits,
-        knowledgeBlock: normalizedInput.knowledgeBlock,
-        courseType: normalizedInput.courseType,
-        cloItems: normalizedInput.cloItems,
-        assessmentComponents: normalizedInput.assessmentComponents,
-      });
-
-      return {
-        ok: true,
-        data: request,
       };
     }
 
@@ -419,18 +360,7 @@ export async function archiveCourse(input: ArchiveCourseInput): Promise<ServiceR
 
   const normalizedInput = parsedInput.data;
 
-  if (normalizedInput.actorRole === "teacher") {
-    const requestResult = await createCourseChangeRequest({
-      courseId: normalizedInput.courseId,
-      actorId: normalizedInput.actorId,
-      actorRole: normalizedInput.actorRole,
-      action: "archive",
-    });
-
-    return requestResult.ok ? { ok: true, data: { archived: true } } : { ok: false, error: requestResult.error };
-  }
-
-  if (normalizedInput.actorRole !== "admin" && normalizedInput.actorRole !== "moderator") {
+  if (normalizedInput.actorRole !== "moderator") {
     return {
       ok: false,
       error: {
@@ -474,7 +404,7 @@ export async function archiveCourse(input: ArchiveCourseInput): Promise<ServiceR
 export async function createCourseChangeRequest(
   input: CreateCourseChangeRequestInput,
 ): Promise<ServiceResult<CourseChangeRequest>> {
-  if (input.actorRole !== "teacher" && input.actorRole !== "moderator" && input.actorRole !== "admin") {
+  if (input.actorRole !== "moderator") {
     return {
       ok: false,
       error: {
@@ -484,12 +414,12 @@ export async function createCourseChangeRequest(
     };
   }
 
-  if (input.action === "delete" && input.actorRole !== "admin") {
+  if (input.action === "delete") {
     return {
       ok: false,
       error: {
         code: "FORBIDDEN",
-        message: "Chỉ Admin được yêu cầu xóa học phần.",
+        message: "Luồng yêu cầu xóa học phần đã được bỏ.",
       },
     };
   }
@@ -503,16 +433,6 @@ export async function createCourseChangeRequest(
         error: {
           code: "NOT_FOUND",
           message: "Không tìm thấy học phần.",
-        },
-      };
-    }
-
-    if (input.actorRole === "teacher" && course.ownerId !== input.actorId) {
-      return {
-        ok: false,
-        error: {
-          code: "FORBIDDEN",
-          message: "Bạn không được phép thao tác với học phần này.",
         },
       };
     }
@@ -540,12 +460,12 @@ export async function createCourseChangeRequest(
 export async function reviewCourseChangeRequest(
   input: ReviewCourseChangeRequestInput,
 ): Promise<ServiceResult<CourseChangeRequest>> {
-  if (input.actorRole !== "moderator" && input.actorRole !== "admin") {
+  if (input.actorRole !== "moderator") {
     return {
       ok: false,
       error: {
         code: "FORBIDDEN",
-        message: "Chỉ Mod/Admin được duyệt yêu cầu thay đổi học phần.",
+        message: "Luồng duyệt yêu cầu học phần đã được bỏ.",
       },
     };
   }
@@ -573,41 +493,14 @@ export async function reviewCourseChangeRequest(
       };
     }
 
-    if (request.action === "delete" && input.actorRole !== "admin") {
+    if (request.action === "create" || request.action === "update" || request.action === "archive" || request.action === "delete") {
       return {
         ok: false,
         error: {
           code: "FORBIDDEN",
-          message: "Chỉ Admin được duyệt yêu cầu xóa học phần.",
+          message: "Luồng duyệt yêu cầu học phần đã được bỏ.",
         },
       };
-    }
-
-    if (request.action === "create" && input.actorRole !== "admin") {
-      return {
-        ok: false,
-        error: {
-          code: "FORBIDDEN",
-          message: "Chỉ Admin được duyệt yêu cầu tạo học phần.",
-        },
-      };
-    }
-
-    if (request.action === "update" && (input.actorRole !== "moderator" || request.assignedModeratorId !== input.actorId)) {
-      return {
-        ok: false,
-        error: {
-          code: "FORBIDDEN",
-          message: "Chỉ Mod đang quản lý học phần được xác nhận chỉnh sửa này.",
-        },
-      };
-    }
-
-    if (input.decision === "approved") {
-      await applyApprovedCourseChangeRequestRepository({
-        request,
-        reviewedBy: input.actorId,
-      });
     }
 
     const reviewed = await reviewCourseChangeRequestRepository({
@@ -657,12 +550,12 @@ export async function deleteCourse(input: DeleteCourseInput): Promise<ServiceRes
     };
   }
 
-  if (parsedInput.data.actorRole !== "admin") {
+  if (parsedInput.data.actorRole !== "moderator") {
     return {
       ok: false,
       error: {
         code: "FORBIDDEN",
-        message: "Chỉ Admin được xóa học phần.",
+        message: "Chỉ Giám sát viên được xóa học phần.",
       },
     };
   }
@@ -731,7 +624,7 @@ export async function listActiveModerators(): Promise<ServiceResult<CourseModera
       ok: false,
       error: {
         code: "UNKNOWN_ERROR",
-        message: "Không thể tải danh sách Mod.",
+        message: "Không thể tải danh sách Giám sát viên.",
         details: normalizeRepositoryError(error).message,
       },
     };
@@ -760,39 +653,46 @@ export async function assignCourseModerator(input: AssignCourseModeratorInput): 
       ok: false,
       error: {
         code: "FORBIDDEN",
-        message: "Chỉ Admin được giao Mod quản lý học phần.",
+        message: "Chỉ Quản trị viên được gán quyền Giám sát viên quản lý học phần.",
       },
     };
   }
 
-  if (!input.courseId || !input.moderatorId) {
+  if (!input.courseId) {
     return {
       ok: false,
       error: {
         code: "VALIDATION_ERROR",
-        message: "Vui lòng chọn học phần và Mod quản lý.",
+        message: "Vui lòng chọn học phần cần cập nhật phân quyền quản lý.",
       },
     };
   }
 
   try {
-    const moderators = await listActiveModeratorsRepository();
-    const selectedModerator = moderators.find((moderator) => moderator.id === input.moderatorId);
+    let selectedModeratorId: string | null = null;
 
-    if (!selectedModerator) {
-      return {
-        ok: false,
-        error: {
-          code: "NOT_FOUND",
-          message: "Không tìm thấy Mod đang hoạt động để giao quản lý.",
-        },
-      };
+    if (input.moderatorId) {
+      const moderators = await listActiveModeratorsRepository();
+      const selectedModerator = moderators.find((moderator) => moderator.id === input.moderatorId);
+
+      if (!selectedModerator) {
+        return {
+          ok: false,
+          error: {
+            code: "NOT_FOUND",
+            message: "Không tìm thấy Giám sát viên đang hoạt động để giao quản lý.",
+          },
+        };
+      }
+
+      selectedModeratorId = selectedModerator.id;
     }
 
     const course = await assignCourseModeratorRepository({
       courseId: input.courseId,
-      moderatorId: input.moderatorId,
+      moderatorId: selectedModeratorId,
       grantedBy: input.actorId,
+      ownerId: input.actorId,
     });
 
     if (!course) {
@@ -811,7 +711,7 @@ export async function assignCourseModerator(input: AssignCourseModeratorInput): 
       ok: false,
       error: {
         code: "UNKNOWN_ERROR",
-        message: "Không thể giao Mod quản lý học phần.",
+        message: "Không thể cập nhật quyền Giám sát viên quản lý học phần.",
         details: normalizeRepositoryError(error).message,
       },
     };
@@ -824,7 +724,7 @@ export async function assignCourseTeachers(input: AssignCourseTeachersInput): Pr
       ok: false,
       error: {
         code: "FORBIDDEN",
-        message: "Chỉ Admin được giao giảng viên phụ trách học phần.",
+        message: "Chỉ Quản trị viên được giao giảng viên phụ trách học phần.",
       },
     };
   }

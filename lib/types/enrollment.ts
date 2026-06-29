@@ -19,6 +19,7 @@ export type EnrollmentRequestCreateItem = {
 
 export type EnrollmentRequestBatchCreateResult = {
   created: number;
+  autoApproved: number;
   skipped: number;
   duplicates: Array<{ courseId: string; classId?: string }>;
 };

@@ -6,6 +6,8 @@ export type AssessmentEmbedMode = "iframe" | "new_tab" | "disabled";
 
 export type AssessmentStatus = "draft" | "open" | "closed" | "archived";
 
+export type AssessmentComponentType = "diagnostic" | "frequent" | "periodic" | "final";
+
 export type StudentAssessmentListStatus = "available" | "completed" | "overdue" | "upcoming";
 
 export type AssessmentSummary = {
@@ -22,6 +24,8 @@ export type AssessmentSummary = {
   provider: AssessmentProvider;
   formUrl?: string;
   embedMode: AssessmentEmbedMode;
+  assessmentComponentType?: AssessmentComponentType;
+  assessmentCloCodes?: string[];
   attemptLimit: number;
   shuffleQuestions: boolean;
   showFeedbackAfterSubmit: boolean;
@@ -29,6 +33,10 @@ export type AssessmentSummary = {
   status: AssessmentStatus;
   openAt?: string;
   dueAt?: string;
+  resultsLockedAt?: string;
+  resultsLockedBy?: string;
+  resultsPublishedAt?: string;
+  resultsPublishedBy?: string;
   createdAt: string;
 };
 
@@ -47,6 +55,8 @@ export type StudentAssessmentView = {
   provider: AssessmentProvider;
   formUrl?: string;
   embedMode: AssessmentEmbedMode;
+  assessmentComponentType?: AssessmentComponentType;
+  assessmentCloCodes?: string[];
   attemptLimit: number;
   shuffleQuestions: boolean;
   showFeedbackAfterSubmit: boolean;

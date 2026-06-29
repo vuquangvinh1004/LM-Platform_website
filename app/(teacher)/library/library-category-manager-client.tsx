@@ -7,6 +7,7 @@ import {
   upsertLibraryCategoryAction,
 } from "@/app/(teacher)/library/actions";
 import { initialLibraryActionState } from "@/app/(teacher)/library/library-action-state";
+import { getUserRolePresentation } from "@/lib/presentation/user-role";
 import type { LibraryCategoryItem } from "@/lib/types/library";
 
 type LibraryCategoryManagerClientProps = {
@@ -16,13 +17,17 @@ type LibraryCategoryManagerClientProps = {
 export function LibraryCategoryManagerClient({ categories }: LibraryCategoryManagerClientProps) {
   const [upsertState, upsertAction, isSaving] = useActionState(upsertLibraryCategoryAction, initialLibraryActionState);
   const [archiveState, archiveAction, isArchiving] = useActionState(archiveLibraryCategoryAction, initialLibraryActionState);
+  const adminRole = getUserRolePresentation("admin");
+  const moderatorRole = getUserRolePresentation("moderator");
 
   return (
     <section className="mt-6 rounded-lg border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Danh mục Thư viện</h2>
-          <p className="mt-1 text-sm text-slate-600">Mod/Admin quản lý danh sách danh mục dùng khi tải tài nguyên lên.</p>
+          <p className="mt-1 text-sm text-slate-600">
+            <span className={moderatorRole.emphasisClassName}>{moderatorRole.label}</span>/<span className={adminRole.emphasisClassName}>{adminRole.label}</span> quản lý danh sách danh mục dùng khi tải tài nguyên lên.
+          </p>
         </div>
         <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">{categories.length} danh mục</span>
       </div>

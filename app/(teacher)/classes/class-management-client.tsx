@@ -5,14 +5,14 @@ import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState } from "react";
 
 import {
-  addStudentToClassAction,
   createClassAction,
   createClassLifecycleRequestAction,
   createTemplateClassAction,
   deleteClassTemplateAction,
-  importStudentsCsvToClassAction,
   reviewClassChangeRequestAction,
   reviewClassEnrollmentRequestAction,
+  updateClassAutoApproveEnrollmentAction,
+  updateClassPublicEnrollmentVisibilityAction,
 } from "@/app/(teacher)/classes/actions";
 import { initialClassActionState } from "@/app/(teacher)/classes/class-action-state";
 import type { UserRole } from "@/lib/types/auth";
@@ -63,11 +63,11 @@ export function ClassManagementClient({
   membersByClassId,
 }: ClassManagementClientProps) {
   const [createState, createAction, createPending] = useActionState(createClassAction, initialClassActionState);
-  const [addStudentState, addStudentAction, addStudentPending] = useActionState(addStudentToClassAction, initialClassActionState);
-  const [importStudentsState, importStudentsAction, importStudentsPending] = useActionState(importStudentsCsvToClassAction, initialClassActionState);
   const [lifecycleState, lifecycleAction, lifecyclePending] = useActionState(createClassLifecycleRequestAction, initialClassActionState);
   const [changeRequestReviewState, changeRequestReviewAction, changeRequestReviewPending] = useActionState(reviewClassChangeRequestAction, initialClassActionState);
   const [enrollmentReviewState, enrollmentReviewAction, enrollmentReviewPending] = useActionState(reviewClassEnrollmentRequestAction, initialClassActionState);
+  const [visibilityState, visibilityAction, visibilityPending] = useActionState(updateClassPublicEnrollmentVisibilityAction, initialClassActionState);
+  const [autoApproveState, autoApproveAction, autoApprovePending] = useActionState(updateClassAutoApproveEnrollmentAction, initialClassActionState);
   const [templateDeleteState, templateDeleteAction, templateDeletePending] = useActionState(deleteClassTemplateAction, initialClassActionState);
   const [templateCreateState, templateCreateAction, templateCreatePending] = useActionState(createTemplateClassAction, initialClassActionState);
   const router = useRouter();
@@ -82,8 +82,6 @@ export function ClassManagementClient({
     ? changeRequests.filter((request) => request.action === "create" && request.status === "pending_review")
     : [];
   const focusedCardRef = useRef<HTMLElement | null>(null);
-  const [csvFileNames, setCsvFileNames] = useState<Record<string, string>>({});
-
   useEffect(() => {
     if (!focusedClassId || !focusedCardRef.current) {
       return;
@@ -110,8 +108,8 @@ export function ClassManagementClient({
               <h2 className="text-lg font-semibold text-amber-950">Yêu cầu thay đổi lớp</h2>
               <p className="mt-1 text-sm text-amber-900">
                 {actorRole === "admin"
-                  ? "Admin có thể duyệt toàn bộ yêu cầu mở lớp, lưu trữ hoặc xóa lớp."
-                  : "Mod duyệt các yêu cầu lớp thuộc học phần mình đang quản lý."}
+                  ? "QUẢN TRỊ VIÊN có thể duyệt toàn bộ yêu cầu mở lớp, lưu trữ hoặc xóa lớp."
+                  : "GIÁM SÁT VIÊN duyệt các yêu cầu lớp thuộc học phần mình đang quản lý."}
               </p>
             </div>
             <span className="rounded-full bg-white px-3 py-1 text-sm font-medium text-amber-900">
@@ -242,7 +240,7 @@ export function ClassManagementClient({
               </span>
             </div>
             <p className="mt-2 text-sm text-amber-900">
-              Bạn đã gửi yêu cầu mở lớp. Các lớp dưới đây sẽ xuất hiện trong danh sách chính sau khi được Mod hoặc Admin duyệt.
+              Bạn đã gửi yêu cầu mở lớp. Các lớp dưới đây sẽ xuất hiện trong danh sách chính sau khi được GIÁM SÁT VIÊN hoặc QUẢN TRỊ VIÊN duyệt.
             </p>
             <div className="mt-3 space-y-2">
               {teacherPendingCreateRequests.map((request) => {
@@ -351,6 +349,9 @@ export function ClassManagementClient({
                       <p className="mt-1 text-xs text-slate-500">
                         Học kỳ: {courseClass.semester ?? "-"} · Năm học: {courseClass.academicYear ?? "-"} · Trạng thái: {statusMeta.label}
                       </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Đăng ký công khai: {courseClass.isOpenForEnrollment ? "Đang mở" : "Đang tắt"}
+                      </p>
                       {isFocusedClass ? (
                         <p className="mt-2 inline-flex rounded-full bg-sky-100 px-3 py-1 text-xs font-medium text-sky-900">
                           Lớp này đang có yêu cầu tham gia chờ duyệt từ dashboard
@@ -359,6 +360,19 @@ export function ClassManagementClient({
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="text-sm text-slate-600">{members.length} sinh viên</div>
+                      {actorRole !== "moderator" ? (
+                        <form action={visibilityAction}>
+                          <input name="classId" type="hidden" value={courseClass.id} />
+                          <input name="isOpenForEnrollment" type="hidden" value={courseClass.isOpenForEnrollment ? "false" : "true"} />
+                          <button
+                            className="rounded-md border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 disabled:opacity-60"
+                            disabled={visibilityPending}
+                            type="submit"
+                          >
+                            {courseClass.isOpenForEnrollment ? "Ẩn đăng ký" : "Mở đăng ký"}
+                          </button>
+                        </form>
+                      ) : null}
                       <Link
                         className="rounded-md border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700"
                         href={`/classes/${courseClass.id}/room`}
@@ -369,71 +383,33 @@ export function ClassManagementClient({
                   </div>
 
                   {actorRole !== "moderator" ? (
-                    <form action={addStudentAction} className="mt-4 grid gap-3 md:grid-cols-3" data-testid={`add-student-form-${courseClass.classCode}`}>
-                      <input name="classId" type="hidden" value={courseClass.id} />
-                      <label className="text-sm text-slate-700">
-                        Mã sinh viên
-                        <input className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" data-testid={`add-student-code-${courseClass.classCode}`} name="studentCode" />
-                      </label>
-                      <label className="text-sm text-slate-700">
-                        Họ tên sinh viên
-                        <input className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" data-testid={`add-student-full-name-${courseClass.classCode}`} name="fullName" required />
-                      </label>
-                      <label className="text-sm text-slate-700">
-                        Email
-                        <input className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" data-testid={`add-student-email-${courseClass.classCode}`} name="email" type="email" />
-                      </label>
-                      <div className="md:col-span-3">
-                        <button className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60" data-testid={`add-student-submit-${courseClass.classCode}`} disabled={addStudentPending} type="submit">
-                          {addStudentPending ? "Đang thêm..." : "Thêm sinh viên"}
-                        </button>
-                      </div>
-                    </form>
-                  ) : null}
-
-                  {actorRole !== "moderator" ? (
-                    <form action={importStudentsAction} className="mt-4 rounded-md border border-dashed border-slate-300 p-3" data-testid={`import-students-form-${courseClass.classCode}`}>
-                      <input name="classId" type="hidden" value={courseClass.id} />
-                      <div className="block text-sm text-slate-700">
-                        <span>Nhập CSV sinh viên</span>
-                        <div className="mt-2 flex flex-wrap items-center gap-3">
-                          <label
-                            className="inline-flex cursor-pointer items-center rounded-md border border-slate-900 bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                            htmlFor={`import-students-file-${courseClass.id}`}
-                          >
-                            Chọn file
-                          </label>
-                          <span className="text-sm text-slate-600">{csvFileNames[courseClass.id] ?? "Chưa chọn file"}</span>
-                        </div>
-                          <input
-                          accept=".csv,text/csv"
-                          className="sr-only"
-                          data-testid={`import-students-file-${courseClass.classCode}`}
-                          id={`import-students-file-${courseClass.id}`}
-                          name="csvFile"
-                          onChange={(event) => {
-                            const fileName = event.currentTarget.files?.[0]?.name ?? "Chưa chọn file";
-                            setCsvFileNames((current) => ({ ...current, [courseClass.id]: fileName }));
-                          }}
-                          type="file"
-                          required
-                        />
-                      </div>
-                      <p className="mt-2 text-xs text-slate-500">
-                        Chấp nhận header theo thứ tự: mã sinh viên, họ tên sinh viên, email.
-                      </p>
-                      <button className="mt-3 rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60" data-testid={`import-students-submit-${courseClass.classCode}`} disabled={importStudentsPending} type="submit">
-                        {importStudentsPending ? "Đang nhập..." : "Nhập CSV"}
-                      </button>
-                    </form>
-                  ) : null}
-
-                  {actorRole !== "moderator" ? (
                     <div className="mt-4 rounded-md border border-sky-200 bg-sky-50 p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <h4 className="text-sm font-medium text-sky-950">Yêu cầu tham gia lớp</h4>
-                      <span className="rounded-full bg-white px-3 py-1 text-xs text-sky-800">{pendingEnrollmentRequests.length} chờ duyệt</span>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <form action={autoApproveAction} className="flex items-center gap-2">
+                          <input name="classId" type="hidden" value={courseClass.id} />
+                          <input name="autoApproveEnrollment" type="hidden" value={courseClass.autoApproveEnrollment ? "false" : "true"} />
+                          <span className="text-xs font-medium text-sky-900">Duyệt tự động</span>
+                          <button
+                            aria-label={courseClass.autoApproveEnrollment ? "Tắt duyệt tự động" : "Bật duyệt tự động"}
+                            className={`relative inline-flex h-7 w-12 items-center rounded-full transition ${courseClass.autoApproveEnrollment ? "bg-emerald-600" : "bg-slate-300"} disabled:opacity-60`}
+                            disabled={autoApprovePending}
+                            type="submit"
+                          >
+                            <span
+                              className={`inline-block h-5 w-5 transform rounded-full bg-white transition ${courseClass.autoApproveEnrollment ? "translate-x-6" : "translate-x-1"}`}
+                            />
+                          </button>
+                        </form>
+                        <span className="rounded-full bg-white px-3 py-1 text-xs text-sky-800">{pendingEnrollmentRequests.length} chờ duyệt</span>
+                      </div>
                     </div>
+                    <p className="mt-2 text-xs text-sky-800">
+                      {courseClass.autoApproveEnrollment
+                        ? "Khi bật, yêu cầu tham gia mới của sinh viên sẽ được duyệt ngay và tự vào lớp."
+                        : "Khi tắt, giảng viên cần duyệt thủ công từng yêu cầu tham gia lớp."}
+                    </p>
                     {pendingEnrollmentRequests.length === 0 ? (
                       <p className="mt-2 text-sm text-sky-800">Chưa có yêu cầu tham gia đang chờ duyệt.</p>
                     ) : (
@@ -494,19 +470,19 @@ export function ClassManagementClient({
           )}
         </div>
         )}
-        {addStudentState.message ? (
-          <p className={addStudentState.status === "error" ? "mt-3 text-sm text-red-600" : "mt-3 text-sm text-emerald-700"} data-testid="add-student-message">
-            {addStudentState.message}
-          </p>
-        ) : null}
-        {importStudentsState.message ? (
-          <p className={importStudentsState.status === "error" ? "mt-3 text-sm text-red-600" : "mt-3 text-sm text-emerald-700"} data-testid="import-students-message">
-            {importStudentsState.message}
-          </p>
-        ) : null}
         {lifecycleState.message ? (
           <p className={lifecycleState.status === "error" ? "mt-3 text-sm text-red-600" : "mt-3 text-sm text-emerald-700"}>
             {lifecycleState.message}
+          </p>
+        ) : null}
+        {visibilityState.message ? (
+          <p className={visibilityState.status === "error" ? "mt-3 text-sm text-red-600" : "mt-3 text-sm text-emerald-700"}>
+            {visibilityState.message}
+          </p>
+        ) : null}
+        {autoApproveState.message ? (
+          <p className={autoApproveState.status === "error" ? "mt-3 text-sm text-red-600" : "mt-3 text-sm text-emerald-700"}>
+            {autoApproveState.message}
           </p>
         ) : null}
         {enrollmentReviewState.message ? (
@@ -555,6 +531,10 @@ export function ClassManagementClient({
               <option value="archived">Đã lưu trữ</option>
             </select>
           </label>
+          <label className="flex items-center gap-2 text-sm text-slate-700 md:col-span-2">
+            <input name="isOpenForEnrollment" type="checkbox" value="on" />
+            <span>Hiển thị lớp này tại khung "Các lớp đang mở đăng ký" trên trang đăng nhập</span>
+          </label>
           <div className="md:col-span-2 flex items-end">
             <button className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-60" data-testid="create-class-submit" disabled={createPending} type="submit">
               {createPending ? "Đang gửi..." : "Gửi yêu cầu mở lớp"}
@@ -589,6 +569,9 @@ export function ClassManagementClient({
                         </p>
                         <p className="mt-1 text-xs text-slate-500">
                           Học kỳ: {request.semester ?? "-"} · Năm học: {request.academicYear ?? "-"}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Đăng ký công khai: {request.requestedOpenForEnrollment ? "Đang mở" : "Đang tắt"}
                         </p>
                       </div>
                       <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">

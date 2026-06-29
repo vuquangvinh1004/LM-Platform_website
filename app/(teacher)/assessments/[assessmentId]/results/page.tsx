@@ -1,5 +1,6 @@
 import { AssessmentGradingClient } from "@/app/(teacher)/assessments/[assessmentId]/results/assessment-grading-client";
 import { AssessmentResultsImportClient } from "@/app/(teacher)/assessments/[assessmentId]/results/assessment-results-import-client";
+import { AssessmentResultsSubmitClient } from "@/app/(teacher)/assessments/[assessmentId]/results/assessment-results-submit-client";
 import Link from "next/link";
 
 import { AdminAreaLink } from "@/components/ui/admin-area-link";
@@ -36,7 +37,7 @@ type AssessmentResultsPageProps = {
 };
 
 export default async function AssessmentResultsPage({ params, searchParams }: AssessmentResultsPageProps) {
-  const profileResult = await requireRole(["teacher", "moderator", "admin"]);
+  const profileResult = await requireRole(["teacher", "admin"]);
 
   if (!profileResult.ok) {
     return (
@@ -77,6 +78,18 @@ export default async function AssessmentResultsPage({ params, searchParams }: As
   ]);
 
   const isInternalAssessment = authoringModeResult.ok && authoringModeResult.data.deliveryMode === "internal";
+  const resultsLocked = Boolean(assessmentSummary?.resultsLockedAt);
+  const resultsPublished = Boolean(assessmentSummary?.resultsPublishedAt);
+  const importDisabledMessage = resultsPublished
+    ? "Kết quả đã được NỘP KẾT QUẢ cho Mod nên không thể nhập file hoặc tải kết quả lên nữa."
+    : resultsLocked
+      ? "Kết quả đang bị khóa; hãy chọn MỞ KẾT QUẢ nếu bạn muốn nhập file và tải kết quả lên."
+      : undefined;
+  const gradingDisabledMessage = resultsPublished
+    ? "Kết quả đã được NỘP KẾT QUẢ cho Mod nên không thể chỉnh sửa hoặc cập nhật điểm nữa."
+    : resultsLocked
+      ? "Kết quả đang bị khóa; hãy chọn MỞ KẾT QUẢ nếu bạn muốn chỉnh sửa hoặc cập nhật điểm."
+      : undefined;
 
   const [internalDefinitionResult, gradingAttemptsResult] = isInternalAssessment
     ? await Promise.all([
@@ -140,7 +153,7 @@ export default async function AssessmentResultsPage({ params, searchParams }: As
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-6 py-12">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
-        {profileResult.data.role !== "admin" ? <BackTextLink href="/assessments">Quay về quản lý bài kiểm tra</BackTextLink> : <div />}
+        {profileResult.data.role !== "admin" ? <BackTextLink href="/assessments">Quay về Quản lý bài kiểm tra</BackTextLink> : <div />}
         {profileResult.data.role === "admin" ? <AdminAreaLink /> : null}
       </div>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
@@ -159,10 +172,22 @@ export default async function AssessmentResultsPage({ params, searchParams }: As
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         {!isInternalAssessment ? (
           <div className="min-w-[320px] flex-1">
-            <AssessmentResultsImportClient assessmentId={resolvedParams.assessmentId} />
+            <AssessmentResultsImportClient
+              assessmentCloCodes={assessmentSummary?.assessmentCloCodes ?? []}
+              assessmentId={resolvedParams.assessmentId}
+              disabled={resultsLocked || resultsPublished}
+              disabledMessage={importDisabledMessage}
+            />
           </div>
         ) : <div />}
-        <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
+        <div className="flex shrink-0 flex-wrap items-start gap-2 whitespace-nowrap">
+          {profileResult.data.role === "teacher" ? (
+            <AssessmentResultsSubmitClient
+              assessmentId={resolvedParams.assessmentId}
+              resultsLockedAt={assessmentSummary?.resultsLockedAt}
+              resultsPublishedAt={assessmentSummary?.resultsPublishedAt}
+            />
+          ) : null}
           <Link className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700" href={csvExportHref}>
             Xuất kết quả kiểm tra
           </Link>
@@ -196,6 +221,11 @@ export default async function AssessmentResultsPage({ params, searchParams }: As
                   Điểm <span>{sortIndicator("rawScore")}</span>
                 </Link>
               </th>
+              {(assessmentSummary?.assessmentCloCodes ?? []).map((cloCode) => (
+                <th className="px-3 py-2 text-left font-medium" key={cloCode}>
+                  {cloCode}
+                </th>
+              ))}
               <th className="px-3 py-2 text-left font-medium">
                 <Link className="inline-flex items-center gap-1 hover:text-slate-900" href={buildSortHref("submittedAt")}>
                   Nộp lúc <span>{sortIndicator("submittedAt")}</span>
@@ -216,7 +246,7 @@ export default async function AssessmentResultsPage({ params, searchParams }: As
           <tbody className="divide-y divide-slate-100">
             {results.data.items.length === 0 ? (
               <tr>
-                <td className="px-3 py-4 text-slate-500" colSpan={7}>Chưa có kết quả nào cho bài kiểm tra này.</td>
+                <td className="px-3 py-4 text-slate-500" colSpan={7 + ((assessmentSummary?.assessmentCloCodes ?? []).length)}>Chưa có kết quả nào cho bài kiểm tra này.</td>
               </tr>
             ) : (
               results.data.items.map((item) => (
@@ -225,6 +255,11 @@ export default async function AssessmentResultsPage({ params, searchParams }: As
                   <td className="px-3 py-2 text-slate-900">{item.studentFullName}</td>
                   <td className="px-3 py-2 text-slate-600">{item.studentEmail ?? "-"}</td>
                   <td className="px-3 py-2 text-slate-700">{item.rawScore ?? "-"}{item.maxScore ? ` / ${item.maxScore}` : ""}</td>
+                  {(assessmentSummary?.assessmentCloCodes ?? []).map((cloCode) => (
+                    <td className="px-3 py-2 text-slate-700" key={`${item.id}-${cloCode}`}>
+                      {item.cloScores?.[cloCode] ?? "-"}
+                    </td>
+                  ))}
                   <td className="px-3 py-2 text-slate-600">{item.submittedAt ? new Date(item.submittedAt).toLocaleString("vi-VN") : "-"}</td>
                   <td className="px-3 py-2 text-slate-600">{item.sourceLabel ?? submissionSourceLabels[item.source] ?? item.source}</td>
                   <td className="px-3 py-2 text-slate-600">{item.note ?? "-"}</td>
@@ -243,6 +278,8 @@ export default async function AssessmentResultsPage({ params, searchParams }: As
         <AssessmentGradingClient
           assessmentId={resolvedParams.assessmentId}
           attempts={gradingAttemptsResult.data}
+          disabled={resultsLocked || resultsPublished}
+          disabledMessage={gradingDisabledMessage}
           definition={internalDefinitionResult.data}
         />
       ) : null}

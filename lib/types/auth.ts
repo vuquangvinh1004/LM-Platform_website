@@ -13,6 +13,6 @@ export type Profile = {
   access_status: StudentAccessStatus;
   access_expires_at: string | null;
   student_code: string | null;
-  teacher_code: string | null;
+  role_code: string | null;
   avatar_url: string | null;
 };

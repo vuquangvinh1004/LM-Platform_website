@@ -13,6 +13,8 @@ export const createAssessmentSchema = z.object({
   provider: z.enum(["google_form", "microsoft_form", "manual", "internal", "other"]),
   formUrl: z.string().url().optional(),
   embedMode: z.enum(["iframe", "new_tab", "disabled"]).optional(),
+  assessmentComponentType: z.enum(["diagnostic", "frequent", "periodic", "final"]),
+  assessmentCloCodes: z.array(z.string().trim().min(1).max(50)).default([]),
   maxScore: z.number().positive().optional(),
   attemptLimit: z.number().int().positive().optional(),
   shuffleQuestions: z.boolean().optional(),

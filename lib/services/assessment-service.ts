@@ -6,6 +6,7 @@ import {
   listCompletedAssessmentIdsForStudentRepository,
   listAssessmentsForManagerRepository,
   listAssessmentsForStudentRepository,
+  updateAssessmentResultsWorkflowRepository,
   updateAssessmentStatusRepository,
 } from "@/lib/repositories/assessment-repository";
 import { getAssessmentAuthoringModeRepository, getInternalAssessmentDefinitionRepository } from "@/lib/repositories/assessment-runtime-repository";
@@ -206,6 +207,8 @@ export async function createAssessment(
       provider: providerSettings.data.provider,
       formUrl: providerSettings.data.formUrl,
       embedMode: providerSettings.data.embedMode,
+      assessmentComponentType: normalizedInput.assessmentComponentType,
+      assessmentCloCodes: normalizedInput.assessmentCloCodes,
       maxScore: normalizedInput.maxScore,
       attemptLimit: normalizedAttemptLimit,
       shuffleQuestions: normalizedInput.shuffleQuestions ?? false,
@@ -632,6 +635,144 @@ export async function deleteAssessment(
       error: {
         code: "UNKNOWN_ERROR",
         message: "Không thể xóa bài kiểm tra.",
+        details: error instanceof Error ? error.message : String(error),
+      },
+    };
+  }
+}
+
+export async function lockAssessmentResults(input: {
+  assessmentId: string;
+  actorId: string;
+  actorRole: "admin" | "moderator" | "teacher" | "student";
+}): Promise<ServiceResult<AssessmentSummary>> {
+  if (input.actorRole !== "teacher" && input.actorRole !== "admin") {
+    return {
+      ok: false,
+      error: {
+        code: "FORBIDDEN",
+        message: "Chỉ giảng viên được khóa kết quả bài kiểm tra.",
+      },
+    };
+  }
+
+  try {
+    const assessment = await getAssessmentSummaryRepository(input.assessmentId);
+
+    if (!assessment) {
+      return {
+        ok: false,
+        error: {
+          code: "NOT_FOUND",
+          message: "Không tìm thấy bài kiểm tra hoặc bạn không có quyền cập nhật.",
+        },
+      };
+    }
+
+    if (assessment.resultsPublishedAt) {
+      return {
+        ok: false,
+        error: {
+          code: "CONFLICT",
+          message: "Kết quả đã được nộp cho Mod và không thể khóa/mở lại.",
+        },
+      };
+    }
+
+    const updated = await updateAssessmentResultsWorkflowRepository({
+      assessmentId: input.assessmentId,
+      resultsLockedAt: new Date().toISOString(),
+      resultsLockedBy: input.actorId,
+      resultsPublishedAt: assessment.resultsPublishedAt ?? null,
+      resultsPublishedBy: assessment.resultsPublishedBy ?? null,
+    });
+
+    if (!updated) {
+      return {
+        ok: false,
+        error: {
+          code: "NOT_FOUND",
+          message: "Không tìm thấy bài kiểm tra hoặc bạn không có quyền cập nhật.",
+        },
+      };
+    }
+
+    return { ok: true, data: updated };
+  } catch (error) {
+    return {
+      ok: false,
+      error: {
+        code: "UNKNOWN_ERROR",
+        message: "Không thể khóa kết quả bài kiểm tra.",
+        details: error instanceof Error ? error.message : String(error),
+      },
+    };
+  }
+}
+
+export async function unlockAssessmentResults(input: {
+  assessmentId: string;
+  actorId: string;
+  actorRole: "admin" | "moderator" | "teacher" | "student";
+}): Promise<ServiceResult<AssessmentSummary>> {
+  if (input.actorRole !== "teacher" && input.actorRole !== "admin") {
+    return {
+      ok: false,
+      error: {
+        code: "FORBIDDEN",
+        message: "Chỉ giảng viên được mở lại kết quả bài kiểm tra.",
+      },
+    };
+  }
+
+  try {
+    const assessment = await getAssessmentSummaryRepository(input.assessmentId);
+
+    if (!assessment) {
+      return {
+        ok: false,
+        error: {
+          code: "NOT_FOUND",
+          message: "Không tìm thấy bài kiểm tra hoặc bạn không có quyền cập nhật.",
+        },
+      };
+    }
+
+    if (assessment.resultsPublishedAt) {
+      return {
+        ok: false,
+        error: {
+          code: "CONFLICT",
+          message: "Kết quả đã được nộp cho Mod và không thể mở lại.",
+        },
+      };
+    }
+
+    const updated = await updateAssessmentResultsWorkflowRepository({
+      assessmentId: input.assessmentId,
+      resultsLockedAt: null,
+      resultsLockedBy: null,
+      resultsPublishedAt: assessment.resultsPublishedAt ?? null,
+      resultsPublishedBy: assessment.resultsPublishedBy ?? null,
+    });
+
+    if (!updated) {
+      return {
+        ok: false,
+        error: {
+          code: "NOT_FOUND",
+          message: "Không tìm thấy bài kiểm tra hoặc bạn không có quyền cập nhật.",
+        },
+      };
+    }
+
+    return { ok: true, data: updated };
+  } catch (error) {
+    return {
+      ok: false,
+      error: {
+        code: "UNKNOWN_ERROR",
+        message: "Không thể mở lại kết quả bài kiểm tra.",
         details: error instanceof Error ? error.message : String(error),
       },
     };

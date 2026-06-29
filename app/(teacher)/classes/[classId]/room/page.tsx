@@ -85,7 +85,7 @@ export default async function TeacherClassroomRoomPage({ params, searchParams }:
   return (
     <main className="mx-auto min-h-screen max-w-[90rem] px-6 py-8">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
-        {profileResult.data.role !== "admin" ? <BackTextLink href="/classes">Quay về quản lý lớp</BackTextLink> : <div />}
+        {profileResult.data.role !== "admin" ? <BackTextLink href="/classes">Quay về Quản lý lớp</BackTextLink> : <div />}
         {profileResult.data.role === "admin" ? <AdminAreaLink /> : null}
       </div>
 

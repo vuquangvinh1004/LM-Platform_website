@@ -38,12 +38,14 @@ export async function applyClassTemplateAction(classId: string, formData: FormDa
     redirect(buildFlashPath(classId, "template", "error", profileResult.error.message));
   }
 
+  const actorRole = profileResult.data.role as "admin" | "moderator" | "teacher";
+
   // Template application is a special flow because it mutates both the active class room
   // and the template-derived snapshot that other views reuse.
   const result = await applyClassTemplateCommand({
     classId,
     actorId: profileResult.data.id,
-    actorRole: profileResult.data.role,
+    actorRole,
     templateId: String(formData.get("templateId") ?? "").trim(),
   });
 
@@ -65,10 +67,12 @@ export async function createClassAnnouncementAction(classId: string, formData: F
     redirect(buildFlashPath(classId, "announcement", "error", profileResult.error.message));
   }
 
+  const actorRole = profileResult.data.role as "admin" | "moderator" | "teacher";
+
   const result = await createClassAnnouncementCommand({
     classId,
     actorId: profileResult.data.id,
-    actorRole: profileResult.data.role,
+    actorRole,
     title: String(formData.get("title") ?? "").trim(),
     content: String(formData.get("content") ?? "").trim(),
   });
@@ -88,12 +92,14 @@ export async function createClassSessionAction(classId: string, formData: FormDa
     redirect(buildFlashPath(classId, "announcement", "error", profileResult.error.message));
   }
 
+  const actorRole = profileResult.data.role as "admin" | "moderator" | "teacher";
+
   // Creating a session is another snapshot-bearing mutation, so the template snapshot
   // is refreshed as part of the command before we invalidate the room view.
   const result = await createClassSessionCommand({
     classId,
     actorId: profileResult.data.id,
-    actorRole: profileResult.data.role,
+    actorRole,
     title: String(formData.get("title") ?? "").trim(),
   });
 
@@ -118,19 +124,18 @@ export async function sendClassDirectMessageAction(classId: string, formData: Fo
     };
   }
 
+  const actorRole = profileResult.data.role as "admin" | "moderator" | "teacher";
+
   const result = await sendClassDirectMessageCommand({
     classId,
     actorId: profileResult.data.id,
-    actorRole: profileResult.data.role,
+    actorRole,
     recipientId: String(formData.get("recipientId") ?? "").trim(),
     content: String(formData.get("content") ?? "").trim(),
   });
 
   if (!result.ok) {
-    return {
-      ok: false,
-      message: result.error.message,
-    };
+    return result;
   }
 
   revalidatePaths(getClassroomRoomPaths(classId));
@@ -153,10 +158,12 @@ export async function markClassDirectMessagesAsReadAction(classId: string): Prom
     };
   }
 
+  const actorRole = profileResult.data.role as "admin" | "moderator" | "teacher";
+
   const result = await markClassDirectMessagesAsReadCommand({
     classId,
     actorId: profileResult.data.id,
-    actorRole: profileResult.data.role,
+    actorRole,
   });
 
   if (!result.ok) {
@@ -177,10 +184,12 @@ export async function markStudentMessagesAsReadAction(classId: string, studentId
     };
   }
 
+  const actorRole = profileResult.data.role as "admin" | "moderator" | "teacher";
+
   const result = await markClassDirectMessagesAsReadCommand({
     classId,
     actorId: profileResult.data.id,
-    actorRole: profileResult.data.role,
+    actorRole,
     senderId: studentId,
   });
 
@@ -202,10 +211,12 @@ export async function updateTeacherDeskNoteAction(classId: string, formData: For
     };
   }
 
+  const actorRole = profileResult.data.role as "admin" | "moderator" | "teacher";
+
   const result = await updateTeacherDeskNoteCommand({
     classId,
     actorId: profileResult.data.id,
-    actorRole: profileResult.data.role,
+    actorRole,
     note: String(formData.get("note") ?? "").trim() || undefined,
   });
 

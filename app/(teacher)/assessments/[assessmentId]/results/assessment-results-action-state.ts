@@ -19,3 +19,25 @@ export const initialAssessmentResultsImportActionState: AssessmentResultsImportA
   status: "idle",
   nonce: 0,
 };
+
+export type AssessmentResultsSubmitActionState = {
+  status: "idle" | "success" | "error";
+  message?: string;
+  nonce: number;
+};
+
+export const initialAssessmentResultsSubmitActionState: AssessmentResultsSubmitActionState = {
+  status: "idle",
+  nonce: 0,
+};
+
+export type AssessmentResultsLockActionState = {
+  status: "idle" | "success" | "error";
+  message?: string;
+  nonce: number;
+};
+
+export const initialAssessmentResultsLockActionState: AssessmentResultsLockActionState = {
+  status: "idle",
+  nonce: 0,
+};

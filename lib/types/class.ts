@@ -12,6 +12,8 @@ export type CourseClassSummary = {
   semester: string | null;
   academicYear: string | null;
   status: ClassStatus;
+  isOpenForEnrollment: boolean;
+  autoApproveEnrollment: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -43,6 +45,7 @@ export type ClassChangeRequest = {
   semester: string | null;
   academicYear: string | null;
   requestedStatus: ClassStatus | null;
+  requestedOpenForEnrollment?: boolean | null;
   status: "pending_review" | "approved" | "rejected";
   reason: string | null;
   reviewNote: string | null;

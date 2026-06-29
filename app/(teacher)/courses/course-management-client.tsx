@@ -9,12 +9,13 @@ import {
   assignCourseModeratorAction,
   assignCourseTeachersAction,
   createCourseAction,
-  deleteCourseAction,
   reviewCourseChangeRequestAction,
   updateCourseAction,
 } from "@/app/(teacher)/courses/actions";
+import { getUserRolePresentation } from "@/lib/presentation/user-role";
 import type {
   CourseAssessmentComponent,
+  CourseAssessmentComponentType,
   CourseChangeRequest,
   CourseCloItem,
   CourseModeratorOption,
@@ -53,19 +54,12 @@ const visibilityLabels: Record<string, string> = {
   public_preview: "Cho xem trước công khai",
 };
 
-function cloItemsToHiddenValue(items: CourseCloItem[]): string {
-  return items
-    .map((item) => `${item.code.trim()} | ${item.description.trim()}`)
-    .filter((line) => !line.startsWith("|") && !line.endsWith("|"))
-    .join("\n");
-}
-
-function assessmentComponentsToHiddenValue(items: CourseAssessmentComponent[]): string {
-  return items
-    .map((item) => `${item.type.trim()} | ${Number.isFinite(Number(item.weight)) ? Number(item.weight) : 0}`)
-    .filter((line) => !line.startsWith("|"))
-    .join("\n");
-}
+const assessmentComponentTypeLabels: Record<CourseAssessmentComponentType, string> = {
+  diagnostic: "Chẩn đoán",
+  frequent: "Thường xuyên",
+  periodic: "Định kỳ",
+  final: "Tổng kết",
+};
 
 function courseStatusLabel(status: CourseSummary["status"]): string {
   const labels: Record<CourseSummary["status"], string> = {
@@ -77,172 +71,252 @@ function courseStatusLabel(status: CourseSummary["status"]): string {
   return labels[status];
 }
 
-function CourseCloTableInput({
-  defaultItems = [],
-  name,
+function CourseMetadataMatrixInput({
+  defaultCloItems = [],
+  defaultAssessmentComponents = [],
+  cloName,
+  assessmentName,
 }: {
-  defaultItems?: CourseCloItem[];
-  name: string;
+  defaultCloItems?: CourseCloItem[];
+  defaultAssessmentComponents?: CourseAssessmentComponent[];
+  cloName: string;
+  assessmentName: string;
 }) {
-  const [rows, setRows] = useState<CourseCloItem[]>(defaultItems.length > 0 ? defaultItems : [{ code: "", description: "" }]);
-  const hiddenValue = useMemo(() => cloItemsToHiddenValue(rows), [rows]);
-
-  return (
-    <div className="md:col-span-2">
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <p className="text-sm font-medium text-slate-700">Chuẩn đầu ra học phần</p>
-        <button
-          className="rounded-md border border-blue-200 px-3 py-1.5 text-xs font-medium text-blue-700"
-          onClick={() => setRows((currentRows) => [...currentRows, { code: "", description: "" }])}
-          type="button"
-        >
-          Thêm CLO
-        </button>
-      </div>
-      <input name={name} readOnly type="hidden" value={hiddenValue} />
-      <div className="overflow-hidden rounded-md border border-slate-200">
-        <table className="w-full table-fixed text-sm">
-          <thead className="bg-slate-100 text-slate-600">
-            <tr>
-              <th className="w-32 px-3 py-2 text-left font-medium">Mã CLO</th>
-              <th className="px-3 py-2 text-left font-medium">Mô tả CLO</th>
-              <th className="w-24 px-3 py-2 text-left font-medium">Thao tác</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200 bg-white">
-            {rows.map((row, rowIndex) => (
-              <tr key={`clo-row-${rowIndex}`}>
-                <td className="px-3 py-2">
-                  <input
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                    onChange={(event) =>
-                      setRows((currentRows) =>
-                        currentRows.map((currentRow, currentIndex) =>
-                          currentIndex === rowIndex ? { ...currentRow, code: event.target.value } : currentRow,
-                        ),
-                      )
-                    }
-                    placeholder="CLO_01"
-                    value={row.code}
-                  />
-                </td>
-                <td className="px-3 py-2">
-                  <input
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                    onChange={(event) =>
-                      setRows((currentRows) =>
-                        currentRows.map((currentRow, currentIndex) =>
-                          currentIndex === rowIndex ? { ...currentRow, description: event.target.value } : currentRow,
-                        ),
-                      )
-                    }
-                    placeholder="Mô tả chuẩn đầu ra"
-                    value={row.description}
-                  />
-                </td>
-                <td className="px-3 py-2">
-                  <button
-                    className="rounded-md border border-red-200 px-3 py-2 text-xs font-medium text-red-700 disabled:opacity-50"
-                    disabled={rows.length === 1}
-                    onClick={() => setRows((currentRows) => currentRows.filter((_, currentIndex) => currentIndex !== rowIndex))}
-                    type="button"
-                  >
-                    Bớt
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+  const [cloRows, setCloRows] = useState<CourseCloItem[]>(
+    defaultCloItems.length > 0 ? defaultCloItems : [{ code: "", description: "" }],
   );
-}
+  const [assessmentRows, setAssessmentRows] = useState<CourseAssessmentComponent[]>(
+    defaultAssessmentComponents.length > 0 ? defaultAssessmentComponents : [{ type: "diagnostic", weight: 0, cloCodes: [] }],
+  );
+  const normalizedCloRows = useMemo(
+    () => cloRows.map((item) => ({ code: item.code.trim(), description: item.description.trim() })),
+    [cloRows],
+  );
+  const availableCloCodes = useMemo(
+    () => normalizedCloRows.map((item) => item.code).filter(Boolean),
+    [normalizedCloRows],
+  );
+  const cloHiddenValue = useMemo(() => JSON.stringify(normalizedCloRows), [normalizedCloRows]);
+  const assessmentHiddenValue = useMemo(
+    () =>
+      JSON.stringify(
+        assessmentRows.map((item) => ({
+          type: item.type,
+          weight: Number.isFinite(Number(item.weight)) ? Number(item.weight) : 0,
+          cloCodes: (item.cloCodes ?? []).filter((code) => availableCloCodes.includes(code)),
+        })),
+      ),
+    [assessmentRows, availableCloCodes],
+  );
 
-function CourseAssessmentTableInput({
-  defaultItems = [],
-  name,
-}: {
-  defaultItems?: CourseAssessmentComponent[];
-  name: string;
-}) {
-  const [rows, setRows] = useState<CourseAssessmentComponent[]>(defaultItems.length > 0 ? defaultItems : [{ type: "", weight: 0 }]);
-  const hiddenValue = useMemo(() => assessmentComponentsToHiddenValue(rows), [rows]);
+  useEffect(() => {
+    setAssessmentRows((currentRows) => {
+      let hasChanges = false;
+      const nextRows = currentRows.map((row) => {
+        const nextCloCodes = (row.cloCodes ?? []).filter((code) => availableCloCodes.includes(code));
+
+        if (nextCloCodes.length !== (row.cloCodes ?? []).length) {
+          hasChanges = true;
+        }
+
+        return {
+          ...row,
+          cloCodes: nextCloCodes,
+        };
+      });
+
+      return hasChanges ? nextRows : currentRows;
+    });
+  }, [availableCloCodes]);
 
   return (
-    <div className="md:col-span-2">
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium text-slate-700">Thành phần đánh giá</p>
-          <p className="text-xs text-slate-500">Tổng trọng số cần bằng 100%.</p>
+    <>
+      <div className="md:col-span-2">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <p className="text-sm font-medium text-slate-700">Chuẩn đầu ra học phần</p>
+          <button
+            className="rounded-md border border-blue-200 px-3 py-1.5 text-xs font-medium text-blue-700"
+            onClick={() => setCloRows((currentRows) => [...currentRows, { code: "", description: "" }])}
+            type="button"
+          >
+            Thêm CLO
+          </button>
         </div>
-        <button
-          className="rounded-md border border-blue-200 px-3 py-1.5 text-xs font-medium text-blue-700"
-          onClick={() => setRows((currentRows) => [...currentRows, { type: "", weight: 0 }])}
-          type="button"
-        >
-          Thêm thành phần
-        </button>
-      </div>
-      <input name={name} readOnly type="hidden" value={hiddenValue} />
-      <div className="overflow-hidden rounded-md border border-slate-200">
-        <table className="w-full table-fixed text-sm">
-          <thead className="bg-slate-100 text-slate-600">
-            <tr>
-              <th className="px-3 py-2 text-left font-medium">Loại đánh giá</th>
-              <th className="w-36 px-3 py-2 text-left font-medium">Trọng số (%)</th>
-              <th className="w-24 px-3 py-2 text-left font-medium">Thao tác</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200 bg-white">
-            {rows.map((row, rowIndex) => (
-              <tr key={`assessment-row-${rowIndex}`}>
-                <td className="px-3 py-2">
-                  <input
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                    onChange={(event) =>
-                      setRows((currentRows) =>
-                        currentRows.map((currentRow, currentIndex) =>
-                          currentIndex === rowIndex ? { ...currentRow, type: event.target.value } : currentRow,
-                        ),
-                      )
-                    }
-                    placeholder="Chuyên cần"
-                    value={row.type}
-                  />
-                </td>
-                <td className="px-3 py-2">
-                  <input
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                    max={100}
-                    min={0}
-                    onChange={(event) =>
-                      setRows((currentRows) =>
-                        currentRows.map((currentRow, currentIndex) =>
-                          currentIndex === rowIndex ? { ...currentRow, weight: Number(event.target.value) } : currentRow,
-                        ),
-                      )
-                    }
-                    type="number"
-                    value={row.weight}
-                  />
-                </td>
-                <td className="px-3 py-2">
-                  <button
-                    className="rounded-md border border-red-200 px-3 py-2 text-xs font-medium text-red-700 disabled:opacity-50"
-                    disabled={rows.length === 1}
-                    onClick={() => setRows((currentRows) => currentRows.filter((_, currentIndex) => currentIndex !== rowIndex))}
-                    type="button"
-                  >
-                    Bớt
-                  </button>
-                </td>
+        <input name={cloName} readOnly type="hidden" value={cloHiddenValue} />
+        <div className="overflow-hidden rounded-md border border-slate-200">
+          <table className="w-full table-fixed text-sm">
+            <thead className="bg-slate-100 text-slate-600">
+              <tr>
+                <th className="w-32 px-3 py-2 text-left font-medium">Mã CLO</th>
+                <th className="px-3 py-2 text-left font-medium">Mô tả CLO</th>
+                <th className="w-24 px-3 py-2 text-left font-medium">Thao tác</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-200 bg-white">
+              {cloRows.map((row, rowIndex) => (
+                <tr key={`clo-row-${rowIndex}`}>
+                  <td className="px-3 py-2">
+                    <input
+                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                      onChange={(event) =>
+                        setCloRows((currentRows) =>
+                          currentRows.map((currentRow, currentIndex) =>
+                            currentIndex === rowIndex ? { ...currentRow, code: event.target.value } : currentRow,
+                          ),
+                        )
+                      }
+                      placeholder="CLO_01"
+                      value={row.code}
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input
+                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                      onChange={(event) =>
+                        setCloRows((currentRows) =>
+                          currentRows.map((currentRow, currentIndex) =>
+                            currentIndex === rowIndex ? { ...currentRow, description: event.target.value } : currentRow,
+                          ),
+                        )
+                      }
+                      placeholder="Mô tả chuẩn đầu ra"
+                      value={row.description}
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <button
+                      className="rounded-md border border-red-200 px-3 py-2 text-xs font-medium text-red-700 disabled:opacity-50"
+                      disabled={cloRows.length === 1}
+                      onClick={() => setCloRows((currentRows) => currentRows.filter((_, currentIndex) => currentIndex !== rowIndex))}
+                      type="button"
+                    >
+                      Bớt
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+
+      <div className="md:col-span-2">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-slate-700">Thành phần đánh giá</p>
+            <p className="text-xs text-slate-500">Chỉ dùng 4 loại cố định và cho phép tích chọn CLO áp dụng theo từng thành phần.</p>
+          </div>
+          <button
+            className="rounded-md border border-blue-200 px-3 py-1.5 text-xs font-medium text-blue-700 disabled:opacity-50"
+            disabled={assessmentRows.length >= Object.keys(assessmentComponentTypeLabels).length}
+            onClick={() => setAssessmentRows((currentRows) => [...currentRows, { type: "frequent", weight: 0, cloCodes: [] }])}
+            type="button"
+          >
+            Thêm thành phần
+          </button>
+        </div>
+        <input name={assessmentName} readOnly type="hidden" value={assessmentHiddenValue} />
+        <div className="overflow-x-auto rounded-md border border-slate-200">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-100 text-slate-600">
+              <tr>
+                <th className="min-w-48 px-3 py-2 text-left font-medium">Loại đánh giá</th>
+                <th className="w-36 px-3 py-2 text-left font-medium">Trọng số (%)</th>
+                {availableCloCodes.map((cloCode) => (
+                  <th className="w-24 px-3 py-2 text-center font-medium" key={cloCode}>{cloCode}</th>
+                ))}
+                <th className="w-24 px-3 py-2 text-left font-medium">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 bg-white">
+              {assessmentRows.map((row, rowIndex) => {
+                const selectedTypes = assessmentRows.map((item) => item.type);
+
+                return (
+                  <tr key={`assessment-row-${rowIndex}`}>
+                    <td className="px-3 py-2">
+                      <select
+                        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                        onChange={(event) =>
+                          setAssessmentRows((currentRows) =>
+                            currentRows.map((currentRow, currentIndex) =>
+                              currentIndex === rowIndex
+                                ? { ...currentRow, type: event.target.value as CourseAssessmentComponentType }
+                                : currentRow,
+                            ),
+                          )
+                        }
+                        value={row.type}
+                      >
+                        {Object.entries(assessmentComponentTypeLabels).map(([value, label]) => (
+                          <option
+                            disabled={selectedTypes.includes(value as CourseAssessmentComponentType) && row.type !== value}
+                            key={value}
+                            value={value}
+                          >
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                        max={100}
+                        min={0}
+                        onChange={(event) =>
+                          setAssessmentRows((currentRows) =>
+                            currentRows.map((currentRow, currentIndex) =>
+                              currentIndex === rowIndex ? { ...currentRow, weight: Number(event.target.value) } : currentRow,
+                            ),
+                          )
+                        }
+                        type="number"
+                        value={row.weight}
+                      />
+                    </td>
+                    {availableCloCodes.map((cloCode) => (
+                      <td className="px-3 py-2 text-center" key={`${rowIndex}-${cloCode}`}>
+                        <input
+                          checked={(row.cloCodes ?? []).includes(cloCode)}
+                          onChange={(event) =>
+                            setAssessmentRows((currentRows) =>
+                              currentRows.map((currentRow, currentIndex) => {
+                                if (currentIndex !== rowIndex) {
+                                  return currentRow;
+                                }
+
+                                return {
+                                  ...currentRow,
+                                  cloCodes: event.target.checked
+                                    ? [...(currentRow.cloCodes ?? []), cloCode]
+                                    : (currentRow.cloCodes ?? []).filter((code) => code !== cloCode),
+                                };
+                              }),
+                            )
+                          }
+                          type="checkbox"
+                        />
+                      </td>
+                    ))}
+                    <td className="px-3 py-2">
+                      <button
+                        className="rounded-md border border-red-200 px-3 py-2 text-xs font-medium text-red-700 disabled:opacity-50"
+                        disabled={assessmentRows.length === 1}
+                        onClick={() => setAssessmentRows((currentRows) => currentRows.filter((_, currentIndex) => currentIndex !== rowIndex))}
+                        type="button"
+                      >
+                        Bớt
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -289,13 +363,15 @@ function ReadOnlyCourseTable({
                 <tr>
                   <th className="px-3 py-2 text-left font-medium">Loại</th>
                   <th className="w-24 px-3 py-2 text-left font-medium">Trọng số</th>
+                  <th className="px-3 py-2 text-left font-medium">CLO áp dụng</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {assessmentComponents.map((item) => (
                   <tr key={item.type}>
-                    <td className="px-3 py-2 text-slate-700">{item.type}</td>
+                    <td className="px-3 py-2 text-slate-700">{assessmentComponentTypeLabels[item.type] ?? item.type}</td>
                     <td className="px-3 py-2 font-medium text-slate-800">{item.weight}%</td>
+                    <td className="px-3 py-2 text-slate-700">{(item.cloCodes ?? []).length > 0 ? (item.cloCodes ?? []).join(", ") : "-"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -324,20 +400,21 @@ export function CourseManagementClient({
   const [createState, createAction, createPending] = useActionState(createCourseAction, initialCourseActionState);
   const [updateState, updateAction, updatePending] = useActionState(updateCourseAction, initialCourseActionState);
   const [archiveState, archiveAction, archivePending] = useActionState(archiveCourseAction, initialCourseActionState);
-  const [deleteState, deleteAction, deletePending] = useActionState(deleteCourseAction, initialCourseActionState);
   const [reviewState, reviewAction, reviewPending] = useActionState(reviewCourseChangeRequestAction, initialCourseActionState);
   const [assignState, assignAction, assignPending] = useActionState(assignCourseModeratorAction, initialCourseActionState);
-  const [assignTeachersState, assignTeachersAction, assignTeachersPending] = useActionState(
-    assignCourseTeachersAction,
-    initialCourseActionState,
-  );
+  const [assignTeachersState, assignTeachersAction, assignTeachersPending] = useActionState(assignCourseTeachersAction, initialCourseActionState);
   const [assigningCourseId, setAssigningCourseId] = useState<string | null>(null);
   const [assigningTeachersCourseId, setAssigningTeachersCourseId] = useState<string | null>(null);
+  const [selectedModeratorByCourseId, setSelectedModeratorByCourseId] = useState<Record<string, string>>({});
+  const [selectedTeacherByCourseId, setSelectedTeacherByCourseId] = useState<Record<string, string>>({});
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
   const [createFormKey, setCreateFormKey] = useState(0);
   const previousCreateStatusRef = useRef(createState.status);
   const pendingRequests = changeRequests.filter((request) => request.status === "pending_review");
   const isAdmin = actorRole === "admin";
+  const adminRole = getUserRolePresentation("admin");
+  const moderatorRole = getUserRolePresentation("moderator");
+  const teacherRole = getUserRolePresentation("teacher");
 
   useEffect(() => {
     if (previousCreateStatusRef.current !== "success" && createState.status === "success") {
@@ -367,6 +444,10 @@ export function CourseManagementClient({
           ) : (
             courses.map((course) => {
               const isAssignedToModerator = course.ownerRole === "moderator";
+              const assignedTeacherIds = (course.assignedTeachers ?? []).map((teacher) => teacher.id);
+              const selectedModeratorId = selectedModeratorByCourseId[course.id] ?? (isAssignedToModerator ? course.ownerId : "");
+              const selectedTeacherId = selectedTeacherByCourseId[course.id] ?? "";
+              const selectedTeacherAlreadyAssigned = selectedTeacherId ? assignedTeacherIds.includes(selectedTeacherId) : false;
               const isEditingCourse = editingCourseId === course.id;
               const updateFormId = `update-course-form-${course.id}`;
 
@@ -374,12 +455,21 @@ export function CourseManagementClient({
               <article className="rounded-lg border border-slate-200 p-4" data-testid={`course-card-${course.code}`} key={course.id}>
                 {!isAdmin ? (
                   <div className="mb-3 flex flex-wrap justify-end gap-2">
-                    <Link
-                      className="rounded-md border border-teal-300 px-3 py-2 text-xs font-medium text-teal-700"
-                      href="/classes"
-                    >
-                      {actorRole === "moderator" ? "Xem các lớp" : "Tạo/quản lý lớp"}
-                    </Link>
+                    {actorRole === "moderator" ? (
+                      <Link
+                        className="rounded-md border border-teal-300 px-3 py-2 text-xs font-medium text-teal-700"
+                        href={`/courses/${course.id}/results`}
+                      >
+                        Xem kết quả
+                      </Link>
+                    ) : (
+                      <Link
+                        className="rounded-md border border-teal-300 px-3 py-2 text-xs font-medium text-teal-700"
+                        href="/classes"
+                      >
+                        Tạo/quản lý lớp
+                      </Link>
+                    )}
                   </div>
                 ) : null}
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
@@ -412,10 +502,8 @@ export function CourseManagementClient({
                         </dd>
                       </div>
                       <div>
-                        <dt className="text-xs text-slate-500">Mod quản lý</dt>
-                        <dd className="font-medium text-slate-900">
-                          {isAssignedToModerator ? course.ownerFullName ?? "Moderator" : "Chưa giao Mod"}
-                        </dd>
+                        <dt className="text-xs text-slate-500">Giám sát viên quản lý</dt>
+                        <dd className="font-medium text-slate-900">{isAssignedToModerator ? course.ownerFullName ?? "Giám sát viên" : "Quản trị viên đang giữ"}</dd>
                       </div>
                       <div className="md:col-span-4">
                         <dt className="text-xs text-slate-500">Giảng viên phụ trách</dt>
@@ -437,40 +525,52 @@ export function CourseManagementClient({
                           >
                             Giao quản lý
                           </button>
-                          {isAssignedToModerator ? (
-                            <span className="text-xs text-slate-500">Đang giao cho {course.ownerFullName ?? "Moderator"}.</span>
-                          ) : (
-                            <span className="text-xs text-slate-500">Chưa giao Mod quản lý.</span>
-                          )}
                           <button
                             className="rounded-md border border-emerald-300 px-3 py-2 text-xs font-medium text-emerald-700"
                             onClick={() => setAssigningTeachersCourseId((currentId) => (currentId === course.id ? null : course.id))}
                             type="button"
                           >
-                            Giao giảng viên
+                            Giao giảng dạy
                           </button>
+                          {isAssignedToModerator ? (
+                            <span className="text-xs text-slate-500">Đang giao quản lý cho {course.ownerFullName ?? moderatorRole.optionLabel}.</span>
+                          ) : (
+                            <span className="text-xs text-slate-500">{adminRole.optionLabel} đang trực tiếp giữ học phần này.</span>
+                          )}
                         </>
                       ) : null}
-                      <button
-                        className="rounded-md border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700"
-                        onClick={() => setEditingCourseId(course.id)}
-                        type="button"
-                      >
-                        Sửa học phần
-                      </button>
+                      {!isAdmin ? (
+                        <button
+                          className="rounded-md border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700"
+                          onClick={() => setEditingCourseId(course.id)}
+                          type="button"
+                        >
+                          Sửa học phần
+                        </button>
+                      ) : null}
                     </div>
                     {isAdmin && assigningCourseId === course.id ? (
                       <form action={assignAction} className="mt-3 flex flex-wrap items-end gap-3 rounded-md border border-blue-100 bg-white p-3">
                         <input name="courseId" type="hidden" value={course.id} />
+                        <input
+                          name="actionMode"
+                          type="hidden"
+                          value={isAssignedToModerator && selectedModeratorId === course.ownerId ? "remove" : "save"}
+                        />
                         <label className="min-w-72 text-sm text-slate-700">
-                          Chọn Mod quản lý
+                          Chọn Giám sát viên quản lý
                           <select
                             className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                            defaultValue={isAssignedToModerator ? course.ownerId : ""}
                             name="moderatorId"
-                            required
+                            onChange={(event) =>
+                              setSelectedModeratorByCourseId((current) => ({
+                                ...current,
+                                [course.id]: event.target.value,
+                              }))
+                            }
+                            value={selectedModeratorId}
                           >
-                            <option value="">Chọn Mod</option>
+                            <option value="">Chọn Giám sát viên</option>
                             {moderatorOptions.map((moderator) => (
                               <option key={moderator.id} value={moderator.id}>
                                 {moderator.fullName ?? moderator.email ?? moderator.id}
@@ -480,25 +580,41 @@ export function CourseManagementClient({
                         </label>
                         <button
                           className="rounded-md bg-blue-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-                          disabled={assignPending || moderatorOptions.length === 0}
+                          disabled={assignPending || !selectedModeratorId}
                           type="submit"
                         >
-                          {assignPending ? "Đang lưu..." : "Lưu phân quyền"}
+                          {assignPending
+                            ? "Đang lưu..."
+                            : isAssignedToModerator && selectedModeratorId === course.ownerId
+                              ? "Bỏ phân quyền"
+                              : "Lưu quản lý"}
                         </button>
-                        {moderatorOptions.length === 0 ? <p className="text-xs text-red-600">Chưa có tài khoản Mod đang hoạt động.</p> : null}
+                        {moderatorOptions.length === 0 ? (
+                          <p className="text-xs text-amber-700">Chưa có tài khoản Giám sát viên đang hoạt động, bạn chỉ có thể giữ học phần ở quyền Quản trị viên.</p>
+                        ) : null}
                       </form>
                     ) : null}
                     {isAdmin && assigningTeachersCourseId === course.id ? (
-                      <form action={assignTeachersAction} className="mt-3 rounded-md border border-emerald-100 bg-white p-3">
+                      <form action={assignTeachersAction} className="mt-3 flex flex-wrap items-end gap-3 rounded-md border border-emerald-100 bg-white p-3">
                         <input name="courseId" type="hidden" value={course.id} />
-                        <label className="block text-sm text-slate-700">
-                          Chọn giảng viên phụ trách
+                        {assignedTeacherIds.map((teacherId) => (
+                          <input key={`${course.id}-${teacherId}`} name="currentTeacherIds" type="hidden" value={teacherId} />
+                        ))}
+                        <input name="actionMode" type="hidden" value={selectedTeacherAlreadyAssigned ? "remove" : "add"} />
+                        <label className="min-w-72 text-sm text-slate-700">
+                          Chọn giảng viên giảng dạy
                           <select
-                            className="mt-1 min-h-36 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                            defaultValue={(course.assignedTeachers ?? []).map((teacher) => teacher.id)}
-                            multiple
-                            name="teacherIds"
+                            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                            name="teacherId"
+                            onChange={(event) =>
+                              setSelectedTeacherByCourseId((current) => ({
+                                ...current,
+                                [course.id]: event.target.value,
+                              }))
+                            }
+                            value={selectedTeacherId}
                           >
+                            <option value="">Chọn giảng viên</option>
                             {teacherOptions.map((teacher) => (
                               <option key={teacher.id} value={teacher.id}>
                                 {teacher.fullName ?? teacher.email ?? teacher.id}
@@ -506,29 +622,44 @@ export function CourseManagementClient({
                             ))}
                           </select>
                         </label>
-                        <p className="mt-2 text-xs text-slate-500">
-                          Có thể chọn nhiều giảng viên để cùng tạo lớp từ học phần này. Mỗi học phần chỉ có một Mod quản lý.
-                        </p>
-                        <div className="mt-3 flex flex-wrap items-center gap-3">
-                          <button
-                            className="rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-                            disabled={assignTeachersPending}
-                            type="submit"
-                          >
-                            {assignTeachersPending ? "Đang lưu..." : "Lưu giảng viên phụ trách"}
-                          </button>
-                          {teacherOptions.length === 0 ? <p className="text-xs text-red-600">Chưa có giảng viên đang hoạt động.</p> : null}
+                        <button
+                          className="rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                          disabled={assignTeachersPending || !selectedTeacherId}
+                          type="submit"
+                        >
+                          {assignTeachersPending
+                            ? "Đang lưu..."
+                            : selectedTeacherAlreadyAssigned
+                              ? "Bỏ phân quyền"
+                              : "Lưu giảng dạy"}
+                        </button>
+                        <div className="text-xs text-slate-500">
+                          <p className="text-xs text-slate-500">
+                            Có thể chọn nhiều <span className={teacherRole.emphasisClassName}>{teacherRole.label}</span> cho cùng một học phần.
+                          </p>
                         </div>
+                        {teacherOptions.length === 0 ? (
+                          <p className="mt-2 text-xs text-amber-700">Chưa có tài khoản giảng viên đang hoạt động để giao học phần.</p>
+                        ) : null}
                       </form>
                     ) : null}
                     {isAdmin && isAssignedToModerator ? (
                       <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-                        Học phần này đã giao Mod quản lý. Nếu Admin lưu chỉnh sửa, hệ thống sẽ gửi yêu cầu đến Mod quản lý để xác nhận đồng thuận trước khi áp dụng.
+                        <span className={adminRole.emphasisClassName}>{adminRole.label}</span> chỉ theo dõi học phần, cập nhật quyền{" "}
+                        <span className={moderatorRole.emphasisClassName}>{moderatorRole.label}</span> quản lý và phân công{" "}
+                        <span className={teacherRole.emphasisClassName}>{teacherRole.label}</span> giảng dạy tại đây; các thay đổi nội dung học phần
+                        được xử lý ở luồng <span className={moderatorRole.emphasisClassName}>{moderatorRole.label}</span>.
+                      </p>
+                    ) : null}
+                    {isAdmin && !isAssignedToModerator ? (
+                      <p className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                        Học phần này hiện không giao cho <span className={moderatorRole.emphasisClassName}>{moderatorRole.label}</span> nào.{" "}
+                        <span className={adminRole.emphasisClassName}>{adminRole.label}</span> đang giữ quyền quan sát và có thể gán lại bất cứ lúc nào.
                       </p>
                     ) : null}
                   </div>
 
-                {isEditingCourse ? (
+                {!isAdmin && isEditingCourse ? (
                 <>
                 <form
                   action={updateAction}
@@ -627,8 +758,12 @@ export function CourseManagementClient({
                       <option value="archived">Đã lưu trữ</option>
                     </select>
                   </label>
-                  <CourseCloTableInput defaultItems={course.cloItems} name="cloItemsText" />
-                  <CourseAssessmentTableInput defaultItems={course.assessmentComponents} name="assessmentComponentsText" />
+                  <CourseMetadataMatrixInput
+                    assessmentName="assessmentComponentsText"
+                    cloName="cloItemsText"
+                    defaultAssessmentComponents={course.assessmentComponents}
+                    defaultCloItems={course.cloItems}
+                  />
                   <div className="md:col-span-2 text-xs text-slate-500">
                     {course.knowledgeBlock ? `Khối kiến thức: ${knowledgeBlockLabels[course.knowledgeBlock]}` : "Chưa có khối kiến thức"} ·{" "}
                     {course.courseType ? `Loại: ${courseTypeLabels[course.courseType]}` : "Chưa có loại học phần"}
@@ -649,7 +784,7 @@ export function CourseManagementClient({
                     form={updateFormId}
                     type="submit"
                   >
-                    {updatePending ? "Đang cập nhật..." : actorRole === "moderator" ? "Lưu thay đổi và gửi Admin" : "Lưu thay đổi"}
+                    {updatePending ? "Đang cập nhật..." : "Lưu thay đổi"}
                   </button>
                 <form action={archiveAction}>
                   <input name="courseId" type="hidden" value={course.id} />
@@ -662,18 +797,6 @@ export function CourseManagementClient({
                     {archivePending ? "Đang lưu trữ..." : "Lưu trữ"}
                   </button>
                 </form>
-                {actorRole === "admin" ? (
-                  <form action={deleteAction}>
-                    <input name="courseId" type="hidden" value={course.id} />
-                    <button
-                      className="rounded-md border border-red-500 bg-red-50 px-4 py-2 text-sm font-medium text-red-800 disabled:opacity-60"
-                      disabled={deletePending}
-                      type="submit"
-                    >
-                      {deletePending ? "Đang xóa..." : "Xóa học phần"}
-                    </button>
-                  </form>
-                ) : null}
                 </div>
                 </>
                 ) : null}
@@ -698,13 +821,6 @@ export function CourseManagementClient({
             {archiveState.message}
           </p>
         ) : null}
-        {deleteState.message ? (
-          <p
-            className={deleteState.status === "error" ? "mt-3 text-sm text-red-600" : "mt-3 text-sm text-emerald-700"}
-          >
-            {deleteState.message}
-          </p>
-        ) : null}
         {assignState.message ? (
           <p
             className={assignState.status === "error" ? "mt-3 text-sm text-red-600" : "mt-3 text-sm text-emerald-700"}
@@ -721,6 +837,7 @@ export function CourseManagementClient({
         ) : null}
       </section>
 
+      {!isAdmin ? (
       <section className="rounded-lg border border-slate-200 bg-slate-50 p-5">
         <h2 className="text-lg font-semibold text-slate-900">Tạo học phần</h2>
         <form action={createAction} className="mt-4 grid gap-3 md:grid-cols-2" data-testid="create-course-form" key={createFormKey}>
@@ -773,30 +890,7 @@ export function CourseManagementClient({
               <option value="public_preview">{visibilityLabels.public_preview}</option>
             </select>
           </label>
-          {actorRole === "admin" ? (
-            <label className="text-sm text-slate-700 md:col-span-2">
-              Giảng viên phụ trách
-              <select className="mt-1 min-h-32 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" multiple name="teacherIds">
-                {teacherOptions.map((teacher) => (
-                  <option key={teacher.id} value={teacher.id}>
-                    {teacher.fullName ?? teacher.email ?? teacher.id}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-          {actorRole === "admin" ? (
-            <label className="text-sm text-slate-700">
-              Trạng thái
-              <select className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" defaultValue="draft" name="status">
-                <option value="draft">Bản nháp</option>
-                <option value="active">Đang hoạt động</option>
-                <option value="archived">Đã lưu trữ</option>
-              </select>
-            </label>
-          ) : null}
-          <CourseCloTableInput name="cloItemsText" />
-          <CourseAssessmentTableInput name="assessmentComponentsText" />
+          <CourseMetadataMatrixInput assessmentName="assessmentComponentsText" cloName="cloItemsText" />
           <div className="flex items-end">
             <button
               className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
@@ -804,7 +898,7 @@ export function CourseManagementClient({
               disabled={createPending}
               type="submit"
             >
-              {createPending ? "Đang gửi..." : actorRole === "moderator" ? "Gửi Admin duyệt" : "Tạo học phần"}
+              {createPending ? "Đang gửi..." : "Tạo học phần"}
             </button>
           </div>
         </form>
@@ -817,20 +911,22 @@ export function CourseManagementClient({
           </p>
         ) : null}
       </section>
+      ) : null}
 
+      {!isAdmin ? (
       <section className="rounded-lg border border-amber-200 bg-amber-50 p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-amber-950">Yêu cầu thay đổi học phần</h2>
-            <p className="mt-1 text-sm text-amber-800">Mod đề nghị tạo học phần để Admin duyệt; các yêu cầu xóa chỉ Admin được duyệt.</p>
+            <h2 className="text-lg font-semibold text-amber-950">Ghi chú thay đổi học phần</h2>
+            <p className="mt-1 text-sm text-amber-800">{moderatorRole.optionLabel} quản lý học phần trực tiếp; khu vực này chỉ còn là chỗ hiển thị lịch sử hoặc ghi chú nếu có dữ liệu cũ.</p>
           </div>
-          <span className="rounded-full bg-white px-3 py-1 text-sm text-amber-800">{pendingRequests.length} chờ duyệt</span>
+          <span className="rounded-full bg-white px-3 py-1 text-sm text-amber-800">{pendingRequests.length} mục lịch sử</span>
         </div>
 
         <div className="mt-4 space-y-3">
           {changeRequests.length === 0 ? (
             <div className="rounded-md border border-dashed border-amber-300 bg-white/70 p-4 text-sm text-amber-800">
-              Chưa có yêu cầu thay đổi học phần.
+              Chưa có lịch sử thay đổi học phần.
             </div>
           ) : (
             changeRequests.map((request) => (
@@ -859,9 +955,7 @@ export function CourseManagementClient({
                   </div>
                   <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">{request.status}</span>
                 </div>
-                {((actorRole === "admin" && request.action !== "update") ||
-                  (actorRole === "moderator" && (request.action === "archive" || request.action === "update"))) &&
-                request.status === "pending_review" ? (
+                {actorRole === "moderator" && (request.action === "archive" || request.action === "update") && request.status === "pending_review" ? (
                   <form action={reviewAction} className="mt-3 flex flex-wrap items-end gap-4">
                     <input name="requestId" type="hidden" value={request.id} />
                     <label className="grid gap-2 text-sm text-slate-700">
@@ -876,7 +970,7 @@ export function CourseManagementClient({
                       <input className="min-w-72 rounded-md border border-slate-300 px-3 py-2 text-sm" name="note" />
                     </label>
                     <button className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60" disabled={reviewPending} type="submit">
-                      {reviewPending ? "Đang lưu..." : "Lưu duyệt"}
+                      {reviewPending ? "Đang lưu..." : "Lưu"}
                     </button>
                   </form>
                 ) : null}
@@ -890,6 +984,7 @@ export function CourseManagementClient({
           </p>
         ) : null}
       </section>
+      ) : null}
     </div>
   );
 }

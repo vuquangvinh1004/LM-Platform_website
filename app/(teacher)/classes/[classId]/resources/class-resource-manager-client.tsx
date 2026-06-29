@@ -105,8 +105,8 @@ export function ClassResourceManagerClient({ data, initialMaterialCategory, retu
             <h2 className="text-lg font-semibold text-amber-950">Tài liệu</h2>
             <p className="mt-1 text-sm text-amber-900">
               {initialMaterialCategory
-                ? `Chọn tài liệu danh mục ${initialMaterialCategory} từ Thư viện để hiển thị trong Tủ tài liệu của lớp.`
-                : "Chọn tài liệu từ Thư viện để hiển thị trong Tủ tài liệu của lớp."}
+                ? `Chọn tài liệu danh mục ${initialMaterialCategory} từ Thư viện dùng chung hoặc từ học phần của lớp để hiển thị trong Tủ tài liệu.`
+                : "Chọn tài liệu từ Thư viện dùng chung hoặc từ học phần của lớp để hiển thị trong Tủ tài liệu."}
             </p>
           </div>
           <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-amber-800">
@@ -117,8 +117,8 @@ export function ClassResourceManagerClient({ data, initialMaterialCategory, retu
         {visibleMaterials.length === 0 ? (
           <p className="mt-4 rounded-md border border-dashed border-amber-300 bg-white p-4 text-sm text-amber-900">
             {initialMaterialCategory
-              ? `Chưa có tài liệu danh mục ${initialMaterialCategory} khả dụng trong học phần này.`
-              : "Chưa có tài liệu khả dụng trong học phần này."}
+              ? `Chưa có tài liệu danh mục ${initialMaterialCategory} khả dụng trong Thư viện dùng chung hoặc học phần của lớp.`
+              : "Chưa có tài liệu khả dụng trong Thư viện dùng chung hoặc học phần của lớp."}
           </p>
         ) : (
           <div className="mt-4 grid gap-3">
@@ -150,7 +150,7 @@ export function ClassResourceManagerClient({ data, initialMaterialCategory, retu
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-sky-950">Mô phỏng</h2>
-            <p className="mt-1 text-sm text-sky-900">Chọn mô phỏng từ Thư viện để hiển thị ở Màn chiếu của lớp.</p>
+            <p className="mt-1 text-sm text-sky-900">Chọn mô phỏng từ Thư viện dùng chung hoặc từ học phần của lớp để hiển thị ở Màn chiếu.</p>
           </div>
           <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-sky-800">
             {selectedSimulationIds.size}/{data.simulations.length} đã chọn
@@ -159,7 +159,7 @@ export function ClassResourceManagerClient({ data, initialMaterialCategory, retu
 
         {data.simulations.length === 0 ? (
           <p className="mt-4 rounded-md border border-dashed border-sky-300 bg-white p-4 text-sm text-sky-900">
-            Chưa có mô phỏng khả dụng trong học phần này.
+            Chưa có mô phỏng khả dụng trong Thư viện dùng chung hoặc học phần của lớp.
           </p>
         ) : (
           <div className="mt-4 grid gap-3">

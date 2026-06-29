@@ -12,6 +12,8 @@ import {
   listClassMembersRepository,
   listExistingActiveMembershipStudentIdsRepository,
   reviewClassChangeRequestRepository,
+  updateClassAutoApproveEnrollmentRepository,
+  updateClassPublicEnrollmentVisibilityRepository,
   type ListClassesForUserRepositoryResult,
   type ListClassMembersRepositoryResult,
 } from "@/lib/repositories/class-repository";
@@ -37,6 +39,7 @@ export type CreateClassInput = {
   semester?: string;
   academicYear?: string;
   status?: "draft" | "active" | "archived";
+  isOpenForEnrollment?: boolean;
 };
 
 export type AddStudentsToClassInput = {
@@ -95,6 +98,20 @@ export type ListClassChangeRequestsInput = {
   courseIds?: string[];
   statuses?: Array<"pending_review" | "approved" | "rejected">;
   actions?: Array<"create" | "archive" | "delete">;
+};
+
+export type UpdateClassPublicEnrollmentVisibilityInput = {
+  classId: string;
+  actorId: string;
+  actorRole: "admin" | "moderator" | "teacher" | "student";
+  isOpenForEnrollment: boolean;
+};
+
+export type UpdateClassAutoApproveEnrollmentInput = {
+  classId: string;
+  actorId: string;
+  actorRole: "admin" | "moderator" | "teacher" | "student";
+  autoApproveEnrollment: boolean;
 };
 
 const fullNameHeaderAliases = new Set([
@@ -341,6 +358,7 @@ export async function createClass(input: CreateClassInput): Promise<ServiceResul
       semester: normalizedInput.semester,
       academicYear: normalizedInput.academicYear,
       status: normalizedInput.status,
+      isOpenForEnrollment: normalizedInput.isOpenForEnrollment,
     });
 
     return {
@@ -356,6 +374,8 @@ export async function createClass(input: CreateClassInput): Promise<ServiceResul
         semester: normalizedInput.semester ?? null,
         academicYear: normalizedInput.academicYear ?? null,
         status: normalizedInput.status,
+        isOpenForEnrollment: normalizedInput.isOpenForEnrollment,
+        autoApproveEnrollment: false,
         createdAt: request.createdAt,
         updatedAt: request.createdAt,
       },
@@ -546,6 +566,134 @@ export async function reviewClassChangeRequest(
   }
 }
 
+export async function updateClassPublicEnrollmentVisibility(
+  input: UpdateClassPublicEnrollmentVisibilityInput,
+): Promise<ServiceResult<{ classId: string; isOpenForEnrollment: boolean }>> {
+  if (input.actorRole !== "teacher" && input.actorRole !== "moderator" && input.actorRole !== "admin") {
+    return {
+      ok: false,
+      error: {
+        code: "FORBIDDEN",
+        message: "Bạn không có quyền cập nhật trạng thái mở đăng ký của lớp.",
+      },
+    };
+  }
+
+  try {
+    const manageableClass = await findManageableClassRepository({
+      classId: input.classId,
+      actorId: input.actorId,
+      actorRole: input.actorRole,
+    });
+
+    if (!manageableClass) {
+      return {
+        ok: false,
+        error: {
+          code: "NOT_FOUND",
+          message: "Không tìm thấy lớp hoặc bạn không được phép cập nhật.",
+        },
+      };
+    }
+
+    if (manageableClass.status === "archived") {
+      return {
+        ok: false,
+        error: {
+          code: "CONFLICT",
+          message: "Lớp đã lưu trữ, không thể đổi trạng thái mở đăng ký.",
+        },
+      };
+    }
+
+    await updateClassPublicEnrollmentVisibilityRepository({
+      classId: input.classId,
+      isOpenForEnrollment: input.isOpenForEnrollment,
+    });
+
+    return {
+      ok: true,
+      data: {
+        classId: input.classId,
+        isOpenForEnrollment: input.isOpenForEnrollment,
+      },
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: {
+        code: "UNKNOWN_ERROR",
+        message: "Không thể cập nhật trạng thái mở đăng ký của lớp.",
+        details: normalizeRepositoryError(error).message,
+      },
+    };
+  }
+}
+
+export async function updateClassAutoApproveEnrollment(
+  input: UpdateClassAutoApproveEnrollmentInput,
+): Promise<ServiceResult<{ classId: string; autoApproveEnrollment: boolean }>> {
+  if (input.actorRole !== "teacher" && input.actorRole !== "moderator" && input.actorRole !== "admin") {
+    return {
+      ok: false,
+      error: {
+        code: "FORBIDDEN",
+        message: "Bạn không có quyền cập nhật chế độ duyệt tự động của lớp.",
+      },
+    };
+  }
+
+  try {
+    const manageableClass = await findManageableClassRepository({
+      classId: input.classId,
+      actorId: input.actorId,
+      actorRole: input.actorRole,
+    });
+
+    if (!manageableClass) {
+      return {
+        ok: false,
+        error: {
+          code: "NOT_FOUND",
+          message: "Không tìm thấy lớp hoặc bạn không được phép cập nhật.",
+        },
+      };
+    }
+
+    if (manageableClass.status === "archived") {
+      return {
+        ok: false,
+        error: {
+          code: "CONFLICT",
+          message: "Lớp đã lưu trữ, không thể đổi chế độ duyệt tự động.",
+        },
+      };
+    }
+
+    await updateClassAutoApproveEnrollmentRepository({
+      classId: input.classId,
+      autoApproveEnrollment: input.autoApproveEnrollment,
+    });
+
+    return {
+      ok: true,
+      data: {
+        classId: input.classId,
+        autoApproveEnrollment: input.autoApproveEnrollment,
+      },
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: {
+        code: "UNKNOWN_ERROR",
+        message: "Không thể cập nhật chế độ duyệt tự động của lớp.",
+        details: normalizeRepositoryError(error).message,
+      },
+    };
+  }
+}
+
 /**
  * Adds student memberships by resolving email or student code and skipping duplicates.
  */
@@ -573,6 +721,16 @@ export async function addStudentsToClass(
       error: {
         code: "FORBIDDEN",
         message: "Bạn không có quyền thêm sinh viên vào lớp học phần.",
+      },
+    };
+  }
+
+  if (normalizedInput.actorRole === "teacher") {
+    return {
+      ok: false,
+      error: {
+        code: "FORBIDDEN",
+        message: "Giảng viên không thêm sinh viên thủ công vào lớp; sinh viên phải tự gửi yêu cầu tham gia.",
       },
     };
   }
@@ -710,6 +868,16 @@ export async function importStudentsToClass(
   }
 
   try {
+    if (parsedInput.data.actorRole === "teacher") {
+      return {
+        ok: false,
+        error: {
+          code: "FORBIDDEN",
+          message: "Giảng viên không nhập CSV sinh viên vào lớp; sinh viên phải tự gửi yêu cầu tham gia.",
+        },
+      };
+    }
+
     const students = parseStudentsFromCsv(parsedInput.data.csvContent);
 
     const importResult = await addStudentsToClass({

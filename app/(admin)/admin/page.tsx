@@ -3,12 +3,9 @@ import { requireRole } from "@/lib/services/auth-service";
 import Link from "next/link";
 
 const adminLinks = [
-  { href: "/dashboard", label: "Bảng điều khiển", description: "Tổng quan học phần, lớp, sinh viên và hoạt động gần đây." },
-  { href: "/courses", label: "Quản lý học phần", description: "Mở, cập nhật, lưu trữ học phần và phân quyền Mod quản lý." },
-  { href: "/classes", label: "Quản lý lớp học", description: "Tạo lớp, thêm sinh viên, nhập CSV và vào phòng học." },
-  { href: "/library", label: "Thư viện", description: "Quản lý tài liệu, mô phỏng, duyệt ẩn/xóa và tích hợp native." },
-  { href: "/access-review", label: "Duyệt truy cập và scope", description: "Duyệt truy cập sinh viên và cấp phạm vi cho Mod/giảng viên; yêu cầu vào lớp do giảng viên xử lý." },
-  { href: "/admin/users", label: "User management", description: "Tạo tài khoản Mod/Giảng viên, cập nhật vai trò và quota Thư viện cá nhân." },
+  { href: "/courses", label: "Quản lý học phần", description: "Xem các học phần đang hoạt động và gán hoặc bỏ quyền GIÁM SÁT VIÊN quản lý." },
+  { href: "/library", label: "Thư viện", description: "Chỉ quản lý Danh mục Thư viện dùng cho tài nguyên được tải lên." },
+  { href: "/admin/users", label: "Quản lý người dùng", description: "Tạo tài khoản GIÁM SÁT VIÊN/GIẢNG VIÊN/SINH VIÊN, cập nhật vai trò và quota Thư viện cá nhân." },
 ] as const;
 
 export default async function AdminPage() {
@@ -17,7 +14,7 @@ export default async function AdminPage() {
   if (!profileResult.ok) {
     return (
       <main className="mx-auto min-h-screen max-w-5xl px-6 py-12">
-        <h1 className="text-2xl font-semibold text-slate-900">Khu vực admin</h1>
+        <h1 className="text-2xl font-semibold text-slate-900">Khu vực Quản trị</h1>
         <p className="mt-2 text-sm text-red-600">{profileResult.error.message}</p>
       </main>
     );
@@ -25,9 +22,9 @@ export default async function AdminPage() {
 
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-6 py-12">
-      <h1 className="text-2xl font-semibold text-slate-900">Khu vực admin</h1>
+      <h1 className="text-2xl font-semibold text-slate-900">Khu vực Quản trị</h1>
       <p className="mt-2 text-sm text-slate-600">
-        Trung tâm điều hướng quản trị cho học phần, lớp học, tài nguyên, bài kiểm tra và phân quyền.
+        Trung tâm điều hướng quản trị cho học phần, danh mục thư viện và tài khoản người dùng.
       </p>
 
       <section className="mt-6 grid gap-3 md:grid-cols-2">

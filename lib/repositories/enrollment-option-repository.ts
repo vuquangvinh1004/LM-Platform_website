@@ -25,6 +25,7 @@ export async function listOpenEnrollmentOptionsRepository(): Promise<EnrollmentO
     .from("classes")
     .select("id,class_code,title,semester,academic_year,course_id,courses!inner(id,code,title)")
     .eq("status", "active")
+    .eq("is_open_for_enrollment", true)
     .eq("courses.status", "active")
     .order("created_at", { ascending: false })
     .limit(100)

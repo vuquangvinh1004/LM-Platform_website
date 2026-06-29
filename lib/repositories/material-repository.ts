@@ -51,6 +51,26 @@ export type ReadableMaterialRecord = {
   reviewStatus: "pending_review" | "approved" | "rejected";
 };
 
+export async function listMaterialReviewStatusesRepository(materialIds: string[]): Promise<Map<string, "pending_review" | "approved" | "rejected">> {
+  if (materialIds.length === 0) {
+    return new Map();
+  }
+
+  const supabase = createServiceRoleSupabaseClient();
+  const { data, error } = await supabase
+    .from("materials")
+    .select("id,review_status")
+    .in("id", materialIds);
+
+  if (error) {
+    throw error;
+  }
+
+  return new Map(
+    (data ?? []).map((row) => [row.id as string, row.review_status as "pending_review" | "approved" | "rejected"]),
+  );
+}
+
 /**
  * Finds a course record that the actor can upload materials for.
  * Repository does not enforce role rules beyond ownership/admin filtering.

@@ -19,6 +19,7 @@
     "local:start": "node scripts/ops/start-local-website.mjs",
     "local:stop": "node scripts/ops/stop-local-website.mjs",
     "fixture:phase4": "node scripts/testing/seed-phase4-fixture.mjs",
+    "fixture:cleanup:course-results": "node scripts/admin/cleanup-course-results-fixtures.mjs",
     "supabase:start": "pnpm dlx supabase@latest start",
     "supabase:stop": "pnpm dlx supabase@latest stop",
     "supabase:status": "pnpm dlx supabase@latest status",
