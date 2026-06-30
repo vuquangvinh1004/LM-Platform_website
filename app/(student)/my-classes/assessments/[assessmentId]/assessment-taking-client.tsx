@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 
 import {
   persistInternalAssessmentAction,
@@ -101,19 +101,24 @@ function getStoredAnswerValues(
 
 export function AssessmentTakingClient({ assessment, internalDefinition, attemptView, review }: AssessmentTakingClientProps) {
   const [actionState, persistAction, isPending] = useActionState(persistInternalAssessmentAction, initialInternalAssessmentActionState);
-  const previousActionNonceRef = useRef(actionState.nonce);
   const [started, setStarted] = useState(
     assessment.deliveryMode === "internal"
       ? attemptView?.attempt?.status === "in_progress"
       : Boolean(attemptView?.attempt),
   );
   const [timerNow, setTimerNow] = useState(() => Date.now());
-  const [optimisticExternalExpiryTimestamp, setOptimisticExternalExpiryTimestamp] = useState<number | null>(null);
   const attemptExpiryTimestamp = attemptView?.attempt?.expiresAt ? new Date(attemptView.attempt.expiresAt).getTime() : null;
+  const optimisticExternalExpiryTimestamp = attemptExpiryTimestamp === null
+    && assessment.deliveryMode === "external"
+    && actionState.status === "success"
+    && actionState.attemptExpiresAt
+    ? new Date(actionState.attemptExpiresAt).getTime()
+    : null;
+  const hasStarted = started || optimisticExternalExpiryTimestamp !== null;
   const isDraftAssessmentValue = isDraftAssessment(assessment.status);
-  const remainingSeconds = started && attemptExpiryTimestamp
+  const remainingSeconds = hasStarted && attemptExpiryTimestamp
     ? Math.max(0, Math.floor((attemptExpiryTimestamp - timerNow) / 1000))
-    : started && optimisticExternalExpiryTimestamp
+    : hasStarted && optimisticExternalExpiryTimestamp
       ? Math.max(0, Math.floor((optimisticExternalExpiryTimestamp - timerNow) / 1000))
     : null;
   const attemptStatus = attemptView?.attempt?.status;
@@ -147,7 +152,7 @@ export function AssessmentTakingClient({ assessment, internalDefinition, attempt
   });
 
   useEffect(() => {
-    if (!started) {
+    if (!hasStarted) {
       return;
     }
 
@@ -156,30 +161,13 @@ export function AssessmentTakingClient({ assessment, internalDefinition, attempt
     }, 1000);
 
     return () => window.clearInterval(timer);
-  }, [started]);
+  }, [hasStarted]);
 
   useRefreshOnSuccess({ status: actionState.status, nonce: actionState.nonce });
 
-  useEffect(() => {
-    if (actionState.status === "success" && actionState.nonce !== previousActionNonceRef.current) {
-      if (assessment.deliveryMode === "external" && actionState.attemptExpiresAt) {
-        setOptimisticExternalExpiryTimestamp(new Date(actionState.attemptExpiresAt).getTime());
-        setStarted(true);
-      }
-    }
-
-    previousActionNonceRef.current = actionState.nonce;
-  }, [actionState.attemptExpiresAt, actionState.nonce, actionState.status, assessment.deliveryMode]);
-
-  useEffect(() => {
-    if (attemptExpiryTimestamp !== null) {
-      setOptimisticExternalExpiryTimestamp(null);
-    }
-  }, [attemptExpiryTimestamp]);
-
   return (
     <section className="mt-6 rounded-lg border border-slate-200 bg-white p-4">
-      {!started ? (
+      {!hasStarted ? (
         <div className="space-y-3">
           <p className="text-sm text-slate-600">
             Khi bấm bắt đầu, nội dung bài kiểm tra sẽ hiển thị. Với bài kiểm tra chính thức, sinh viên chỉ được vào làm trước thời hạn làm bài; riêng bài bản nháp chỉ giới hạn theo số lượt làm.
@@ -270,10 +258,9 @@ export function AssessmentTakingClient({ assessment, internalDefinition, attempt
                         <p className="mt-2 whitespace-pre-wrap text-sm text-slate-800">{question.answerText || "Chưa có câu trả lời."}</p>
                       </div>
                       <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Phản hồi</p>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Phản hồi chấm bài</p>
                         <p className="mt-2 whitespace-pre-wrap text-sm text-slate-800">
                           {question.feedback
-                            || (question.explanation ?? "")
                             || (review.pendingManualReview && question.questionType === "essay"
                               ? "Câu tự luận này đang chờ giảng viên phản hồi."
                               : "Chưa có phản hồi thêm.")}
@@ -449,10 +436,9 @@ export function AssessmentTakingClient({ assessment, internalDefinition, attempt
                               <p className="mt-2 whitespace-pre-wrap text-sm text-slate-800">{question.answerText || "Chưa có câu trả lời."}</p>
                             </div>
                             <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Phản hồi</p>
+                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Phản hồi chấm bài</p>
                               <p className="mt-2 whitespace-pre-wrap text-sm text-slate-800">
                                 {question.feedback
-                                  || (question.explanation ?? "")
                                   || (review.pendingManualReview && question.questionType === "essay"
                                     ? "Câu tự luận này đang chờ giảng viên phản hồi."
                                     : "Chưa có phản hồi thêm.")}

@@ -1,12 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
-import { createAssessmentAction, createQuestionBankItemAction, deleteAssessmentAction, updateAssessmentStatusAction } from "@/app/(teacher)/assessments/actions";
-import { initialAssessmentActionState } from "@/app/(teacher)/assessments/assessment-action-state";
+import {
+  createAssessmentAction,
+  createQuestionBankItemAction,
+  deleteQuestionBankItemAction,
+  deleteAssessmentAction,
+  updateAssessmentStatusAction,
+  updateQuestionBankItemAvailabilityAction,
+} from "@/app/(teacher)/assessments/actions";
+import { initialAssessmentActionState, type AssessmentActionState } from "@/app/(teacher)/assessments/assessment-action-state";
 import { DateTimePickerField } from "@/components/ui/datetime-picker-field";
 import { useRefreshOnSuccess } from "@/lib/hooks/use-refresh-on-success";
 import { cn } from "@/lib/utils";
@@ -14,11 +21,15 @@ import type { UserRole } from "@/lib/types/auth";
 import type { AssessmentSummary } from "@/lib/types/assessment";
 import type { CourseClassSummary } from "@/lib/types/class";
 import type { CourseAssessmentComponent, CourseCloItem } from "@/lib/types/course";
-import type { QuestionBankItem } from "@/lib/types/question-bank";
+import type { QuestionBankItem, QuestionDifficulty } from "@/lib/types/question-bank";
 
 type AssessmentManagementClientProps = {
   actorRole: UserRole;
   classes: CourseClassSummary[];
+  selectedQuestionBankCourseId?: string;
+  showModeratorQuestionBankCatalog?: boolean;
+  showModeratorQuestionBankCreate?: boolean;
+  showModeratorQuestionBankDetail?: boolean;
   courseMetadata: Array<{
     courseId: string;
     courseCode: string;
@@ -76,9 +87,40 @@ const questionTypeLabels: Record<string, string> = {
 };
 
 const difficultyLabels: Record<string, string> = {
-  easy: "Dễ",
-  medium: "Trung bình",
-  hard: "Khó",
+  remembering: "Nhớ (Remembering)",
+  understanding: "Hiểu (Understanding)",
+  applying: "Vận dụng (Applying)",
+  analyzing: "Phân tích (Analyzing)",
+  evaluating: "Đánh giá (Evaluating)",
+  creating: "Sáng tạo (Creating)",
+};
+
+const difficultyDefaultPoints: Record<QuestionDifficulty, number> = {
+  remembering: 1,
+  understanding: 2,
+  applying: 4,
+  analyzing: 6,
+  evaluating: 8,
+  creating: 10,
+};
+
+const allowedDifficultiesByQuestionBuilderType: Record<
+  "multiple_choice_single" | "multiple_choice_multiple" | "true_false" | "short_answer" | "essay",
+  QuestionDifficulty[]
+> = {
+  true_false: ["remembering", "understanding"],
+  multiple_choice_single: ["remembering", "understanding", "applying"],
+  multiple_choice_multiple: ["remembering", "understanding", "applying", "analyzing"],
+  short_answer: ["applying", "analyzing", "evaluating"],
+  essay: ["analyzing", "evaluating", "creating"],
+};
+
+const defaultChoiceRowIds = ["1", "2", "3", "4"];
+
+type ChoiceRowState = {
+  id: string;
+  text: string;
+  isCorrect: boolean;
 };
 
 const assessmentCardClasses: Record<string, string> = {
@@ -136,16 +178,178 @@ function AssessmentDeleteSubmitButton() {
   );
 }
 
+function QuestionBankDeleteSubmitButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <button
+      className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 disabled:opacity-60"
+      disabled={pending}
+      type="submit"
+    >
+      {pending ? "Đang xóa..." : "Xóa"}
+    </button>
+  );
+}
+
+function formatQuestionBankMetadata(item: QuestionBankItem): string {
+  const parts = [
+    getQuestionTypeLabel(item),
+    item.cloCode ? item.cloCode : null,
+    item.chapterLabel ? `Chương ${item.chapterLabel}` : null,
+    difficultyLabels[item.difficulty] ?? item.difficulty,
+    `${item.defaultPoints} điểm`,
+  ].filter((value): value is string => Boolean(value));
+
+  return parts.join(" | ");
+}
+
+type QuestionStatisticRow = {
+  label: string;
+  count: number;
+  points: number;
+  ratio: number;
+};
+
+function formatPercentage(value: number): string {
+  return `${new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 }).format(value)}%`;
+}
+
+function formatDifficultyStatisticLabel(difficulty: QuestionDifficulty): string {
+  return difficultyLabels[difficulty].split(" (")[0] ?? difficultyLabels[difficulty];
+}
+
+function buildQuestionStatisticRows(
+  items: QuestionBankItem[],
+  getLabel: (item: QuestionBankItem) => string,
+): QuestionStatisticRow[] {
+  const totalPoints = items.reduce((sum, item) => sum + item.defaultPoints, 0);
+  const rowsByLabel = new Map<string, { count: number; points: number }>();
+
+  for (const item of items) {
+    const label = getLabel(item);
+    const existing = rowsByLabel.get(label) ?? { count: 0, points: 0 };
+    existing.count += 1;
+    existing.points += item.defaultPoints;
+    rowsByLabel.set(label, existing);
+  }
+
+  const rows = Array.from(rowsByLabel.entries()).map(([label, value]) => ({
+    label,
+    count: value.count,
+    points: value.points,
+    ratio: totalPoints > 0 ? (value.points / totalPoints) * 100 : 0,
+  }));
+
+  return rows.sort((left, right) => left.label.localeCompare(right.label, "vi"));
+}
+
+function QuestionStatisticsTable(props: {
+  title: string;
+  rows: QuestionStatisticRow[];
+}) {
+  const totalCount = props.rows.reduce((sum, row) => sum + row.count, 0);
+  const totalPoints = props.rows.reduce((sum, row) => sum + row.points, 0);
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4">
+      <h4 className="text-sm font-semibold text-slate-900">{props.title}</h4>
+      <div className="mt-3 overflow-x-auto">
+        <table className="min-w-full border-collapse text-sm">
+          <thead>
+            <tr className="bg-slate-50 text-slate-700">
+              <th className="border border-slate-200 px-3 py-2 text-left">{props.title}</th>
+              <th className="border border-slate-200 px-3 py-2 text-center">Số câu</th>
+              <th className="border border-slate-200 px-3 py-2 text-center">Điểm</th>
+              <th className="border border-slate-200 px-3 py-2 text-center">Tỷ lệ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {props.rows.map((row) => (
+              <tr key={row.label}>
+                <td className="border border-slate-200 px-3 py-2">{row.label}</td>
+                <td className="border border-slate-200 px-3 py-2 text-center">{row.count}</td>
+                <td className="border border-slate-200 px-3 py-2 text-center">{row.points}</td>
+                <td className="border border-slate-200 px-3 py-2 text-center">{formatPercentage(row.ratio)}</td>
+              </tr>
+            ))}
+            <tr className="bg-slate-50 font-semibold text-slate-900">
+              <td className="border border-slate-200 px-3 py-2">Tổng</td>
+              <td className="border border-slate-200 px-3 py-2 text-center">{totalCount}</td>
+              <td className="border border-slate-200 px-3 py-2 text-center">{totalPoints}</td>
+              <td className="border border-slate-200 px-3 py-2 text-center">{formatPercentage(totalPoints > 0 ? 100 : 0)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export function AssessmentManagementClient({
   actorRole,
   classes,
+  selectedQuestionBankCourseId = "",
+  showModeratorQuestionBankCatalog = true,
+  showModeratorQuestionBankCreate = true,
+  showModeratorQuestionBankDetail = false,
   courseMetadata,
   assessments,
   questionBankByCourse,
 }: AssessmentManagementClientProps) {
+  const isTeacher = actorRole === "teacher";
+  const isModerator = actorRole === "moderator";
+  const [selectedClassPair, setSelectedClassPair] = useState("");
+  const [deliveryMode, setDeliveryMode] = useState<"external" | "internal">("external");
+  const [creationStatus, setCreationStatus] = useState<AssessmentSummary["status"]>("draft");
+  const [attemptLimitDraftValue, setAttemptLimitDraftValue] = useState("2");
+  const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([]);
+  const [questionBuilderType, setQuestionBuilderType] = useState<"multiple_choice_single" | "multiple_choice_multiple" | "true_false" | "short_answer" | "essay">("multiple_choice_single");
+  const [questionDifficulty, setQuestionDifficulty] = useState<QuestionDifficulty>("remembering");
+  const [defaultPointsValue, setDefaultPointsValue] = useState(String(difficultyDefaultPoints.remembering));
+  const [pendingStatusOverrides, setPendingStatusOverrides] = useState<Record<string, AssessmentSummary["status"]>>({});
+  const [questionPromptValue, setQuestionPromptValue] = useState("");
+  const [choiceRows, setChoiceRows] = useState<ChoiceRowState[]>(defaultChoiceRowIds.map((id) => ({ id, text: "", isCorrect: false })));
+  const [trueFalseAnswerKey, setTrueFalseAnswerKey] = useState("Đúng");
+  const [shortAnswerKeyValue, setShortAnswerKeyValue] = useState("");
+  const [explanationValue, setExplanationValue] = useState("");
+  const [selectedQuestionBankCourseForForm, setSelectedQuestionBankCourseForForm] = useState(selectedQuestionBankCourseId);
+  const [selectedQuestionBankCloCode, setSelectedQuestionBankCloCode] = useState("");
+  const [chapterLabelValue, setChapterLabelValue] = useState("");
+  const resetQuestionBankForm = () => {
+    setQuestionPromptValue("");
+    setChoiceRows(defaultChoiceRowIds.map((id) => ({ id, text: "", isCorrect: false })));
+    setTrueFalseAnswerKey("Đúng");
+    setShortAnswerKeyValue("");
+    setExplanationValue("");
+    setSelectedQuestionBankCloCode("");
+    setChapterLabelValue("");
+    setQuestionBuilderType("multiple_choice_single");
+    setQuestionDifficulty("remembering");
+    setDefaultPointsValue(String(difficultyDefaultPoints.remembering));
+  };
+  const createQuestionBankActionWithClientState = async (
+    prevState: AssessmentActionState,
+    formData: FormData,
+  ) => {
+    const result = await createQuestionBankItemAction(prevState, formData);
+
+    if (result.status === "success") {
+      resetQuestionBankForm();
+    }
+
+    return {
+      ...result,
+      nonce: Date.now(),
+    };
+  };
   const [createState, createAction, isPending] = useActionState(createAssessmentAction, initialAssessmentActionState);
   const [questionBankState, questionBankAction, isQuestionBankPending] = useActionState(
-    createQuestionBankItemAction,
+    createQuestionBankActionWithClientState,
+    initialAssessmentActionState,
+  );
+  const [deleteQuestionBankState, deleteQuestionBankAction] = useActionState(
+    deleteQuestionBankItemAction,
     initialAssessmentActionState,
   );
   const [statusUpdateState, statusUpdateAction] = useActionState(
@@ -156,12 +360,8 @@ export function AssessmentManagementClient({
     deleteAssessmentAction,
     initialAssessmentActionState,
   );
-  const [selectedClassPair, setSelectedClassPair] = useState("");
-  const [deliveryMode, setDeliveryMode] = useState<"external" | "internal">("external");
-  const [creationStatus, setCreationStatus] = useState<AssessmentSummary["status"]>("draft");
-  const [attemptLimitDraftValue, setAttemptLimitDraftValue] = useState("2");
-  const [questionBuilderType, setQuestionBuilderType] = useState<"multiple_choice_single" | "multiple_choice_multiple" | "true_false" | "short_answer" | "essay">("multiple_choice_single");
-  const [pendingStatusOverrides, setPendingStatusOverrides] = useState<Record<string, AssessmentSummary["status"]>>({});
+  useRefreshOnSuccess({ status: questionBankState.status, nonce: questionBankState.nonce });
+  useRefreshOnSuccess({ status: deleteQuestionBankState.status });
   useRefreshOnSuccess({ status: statusUpdateState.status });
   useRefreshOnSuccess({ status: deleteState.status });
 
@@ -170,138 +370,166 @@ export function AssessmentManagementClient({
   const selectedAssessmentComponents = selectedCourseMetadata?.assessmentComponents ?? [];
   const selectedQuestionBankItems = questionBankByCourse.find((bundle) => bundle.courseId === selectedCourseId)?.items ?? [];
   const [selectedAssessmentComponentType, setSelectedAssessmentComponentType] = useState("");
-
-  useEffect(() => {
-    if (!selectedAssessmentComponents.some((component) => component.type === selectedAssessmentComponentType)) {
-      setSelectedAssessmentComponentType(selectedAssessmentComponents[0]?.type ?? "");
-    }
-  }, [selectedAssessmentComponentType, selectedAssessmentComponents]);
+  const effectiveSelectedAssessmentComponentType = selectedAssessmentComponents.some(
+    (component) => component.type === selectedAssessmentComponentType,
+  )
+    ? selectedAssessmentComponentType
+    : (selectedAssessmentComponents[0]?.type ?? "");
+  const selectedAssessmentComponent = selectedAssessmentComponents.find(
+    (component) => component.type === effectiveSelectedAssessmentComponentType,
+  );
+  const selectedAssessmentCloCodes = selectedAssessmentComponent?.cloCodes ?? [];
+  const availableQuestionBankItems = selectedQuestionBankItems.filter((item) => item.isAvailable);
+  const visibleQuestionBankItems = availableQuestionBankItems.filter((item) =>
+    selectedAssessmentCloCodes.length === 0 ? true : Boolean(item.cloCode && selectedAssessmentCloCodes.includes(item.cloCode)),
+  );
+  const selectedTeacherQuestionItems = visibleQuestionBankItems.filter((item) => selectedQuestionIds.includes(item.id));
+  const cloStatisticRows = buildQuestionStatisticRows(
+    selectedTeacherQuestionItems,
+    (item) => item.cloCode ?? "Chưa gắn CLO",
+  );
+  const chapterStatisticRows = buildQuestionStatisticRows(
+    selectedTeacherQuestionItems,
+    (item) => item.chapterLabel ?? "Chưa gắn chương",
+  );
+  const difficultyStatisticRows = buildQuestionStatisticRows(
+    selectedTeacherQuestionItems,
+    (item) => formatDifficultyStatisticLabel(item.difficulty),
+  );
+  const availableQuestionDifficulties = allowedDifficultiesByQuestionBuilderType[questionBuilderType];
+  const selectedModeratorCourseMetadata = courseMetadata.find((course) => course.courseId === selectedQuestionBankCourseForForm);
+  const selectedQuestionBankCourseBundle = questionBankByCourse.find((course) => course.courseId === selectedQuestionBankCourseId);
 
   return (
     <div className="space-y-8">
-      <section>
-        <h2 className="text-lg font-semibold text-slate-900">Danh sách bài kiểm tra</h2>
-        <div className="mt-4 space-y-3">
-          {assessments.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-slate-300 p-6 text-sm text-slate-600">Chưa có bài kiểm tra nào.</div>
-          ) : (
-            assessments.map((assessment) => (
-              (() => {
-                const currentStatus = pendingStatusOverrides[assessment.id] ?? assessment.status;
+      {!isModerator ? (
+        <section>
+          <h2 className="text-lg font-semibold text-slate-900">Danh sách bài kiểm tra</h2>
+          <div className="mt-4 space-y-3">
+            {assessments.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-slate-300 p-6 text-sm text-slate-600">Chưa có bài kiểm tra nào.</div>
+            ) : (
+              assessments.map((assessment) => (
+                (() => {
+                  const currentStatus = pendingStatusOverrides[assessment.id] ?? assessment.status;
 
-                return (
-                  <article
-                    className={cn(
-                      "rounded-lg border p-4 transition-colors",
-                      assessmentCardClasses[currentStatus] ?? "border-slate-200 bg-white",
-                    )}
-                    key={assessment.id}
-                  >
-                    <h3 className="text-base font-semibold text-slate-900">{assessment.title}</h3>
-                    <p className="mt-1 text-sm text-slate-600">
-                      {assessment.classCode} - {assessment.classTitle} | {assessment.courseCode}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Hình thức: {deliveryModeLabels[assessment.deliveryMode] ?? assessment.deliveryMode} | Nguồn:{" "}
-                      {providerLabels[assessment.provider] ?? assessment.provider} | Cách mở: {embedModeLabels[assessment.embedMode] ?? assessment.embedMode} | Trạng thái:{" "}
-                      {assessmentStatusLabels[currentStatus] ?? currentStatus}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Thành phần: {assessment.assessmentComponentType ? assessmentComponentTypeLabels[assessment.assessmentComponentType] ?? assessment.assessmentComponentType : "-"}
-                      {" | "}
-                      CLO: {(assessment.assessmentCloCodes ?? []).length > 0 ? (assessment.assessmentCloCodes ?? []).join(", ") : "-"}
-                    </p>
-                    <div className="mt-3 grid gap-2 text-sm text-slate-700 md:grid-cols-2 xl:grid-cols-4">
-                      <div className="rounded-md bg-slate-50 px-3 py-2">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Bắt đầu</span>
-                        <p className="mt-1">{formatDateTime(assessment.openAt)}</p>
+                  return (
+                    <article
+                      className={cn(
+                        "rounded-lg border p-4 transition-colors",
+                        assessmentCardClasses[currentStatus] ?? "border-slate-200 bg-white",
+                      )}
+                      key={assessment.id}
+                    >
+                      <h3 className="text-base font-semibold text-slate-900">{assessment.title}</h3>
+                      <p className="mt-1 text-sm text-slate-600">
+                        {assessment.classCode} - {assessment.classTitle} | {assessment.courseCode}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Hình thức: {deliveryModeLabels[assessment.deliveryMode] ?? assessment.deliveryMode} | Nguồn:{" "}
+                        {providerLabels[assessment.provider] ?? assessment.provider} | Cách mở: {embedModeLabels[assessment.embedMode] ?? assessment.embedMode} | Trạng thái:{" "}
+                        {assessmentStatusLabels[currentStatus] ?? currentStatus}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Thành phần: {assessment.assessmentComponentType ? assessmentComponentTypeLabels[assessment.assessmentComponentType] ?? assessment.assessmentComponentType : "-"}
+                        {" | "}
+                        CLO: {(assessment.assessmentCloCodes ?? []).length > 0 ? (assessment.assessmentCloCodes ?? []).join(", ") : "-"}
+                      </p>
+                      <div className="mt-3 grid gap-2 text-sm text-slate-700 md:grid-cols-2 xl:grid-cols-4">
+                        <div className="rounded-md bg-slate-50 px-3 py-2">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Bắt đầu</span>
+                          <p className="mt-1">{formatDateTime(assessment.openAt)}</p>
+                        </div>
+                        <div className="rounded-md bg-slate-50 px-3 py-2">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Thời hạn làm bài</span>
+                          <p className="mt-1">{assessment.status === "draft" ? "Không áp dụng cho bản nháp" : formatDateTime(assessment.dueAt)}</p>
+                        </div>
+                        <div className="rounded-md bg-slate-50 px-3 py-2">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Thời lượng</span>
+                          <p className="mt-1">{assessment.status === "draft" ? "Không giới hạn thời gian" : formatTimeLimit(assessment.timeLimitMinutes)}</p>
+                        </div>
+                        <div className="rounded-md bg-slate-50 px-3 py-2">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Số lượt làm bài</span>
+                          <p className="mt-1">{formatAttemptLimit(assessment.attemptLimit)}</p>
+                        </div>
                       </div>
-                      <div className="rounded-md bg-slate-50 px-3 py-2">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Thời hạn làm bài</span>
-                        <p className="mt-1">{assessment.status === "draft" ? "Không áp dụng cho bản nháp" : formatDateTime(assessment.dueAt)}</p>
-                      </div>
-                      <div className="rounded-md bg-slate-50 px-3 py-2">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Thời lượng</span>
-                        <p className="mt-1">{assessment.status === "draft" ? "Không giới hạn thời gian" : formatTimeLimit(assessment.timeLimitMinutes)}</p>
-                      </div>
-                      <div className="rounded-md bg-slate-50 px-3 py-2">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Số lượt làm bài</span>
-                        <p className="mt-1">{formatAttemptLimit(assessment.attemptLimit)}</p>
-                      </div>
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <Link
-                          className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700"
-                          href={`/assessments/${assessment.id}/results`}
-                        >
-                          Xem kết quả
-                        </Link>
-                        <form action={statusUpdateAction} className="flex flex-wrap items-center gap-2">
-                          <input name="assessmentId" type="hidden" value={assessment.id} />
-                          <select
-                            className="rounded-md border border-slate-300 px-2 py-1.5 text-xs text-slate-700"
-                            name="status"
-                            disabled={assessment.status === "draft"}
-                            onChange={(event) =>
-                              setPendingStatusOverrides((current) => ({
-                                ...current,
-                                [assessment.id]: event.target.value as AssessmentSummary["status"],
-                              }))}
-                            value={currentStatus}
+                      <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <Link
+                            className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700"
+                            href={`/assessments/${assessment.id}/results`}
                           >
-                            {assessment.status === "draft" ? (
-                              <option value="draft">Bản nháp</option>
-                            ) : (
-                              <>
-                                <option value="open">Đang mở</option>
-                                <option value="closed">Đã đóng</option>
-                                <option value="archived">Đã lưu trữ</option>
-                              </>
-                            )}
-                          </select>
-                          <AssessmentStatusSubmitButton />
+                            Xem kết quả
+                          </Link>
+                          <form action={statusUpdateAction} className="flex flex-wrap items-center gap-2">
+                            <input name="assessmentId" type="hidden" value={assessment.id} />
+                            <select
+                              className="rounded-md border border-slate-300 px-2 py-1.5 text-xs text-slate-700"
+                              name="status"
+                              disabled={assessment.status === "draft"}
+                              onChange={(event) =>
+                                setPendingStatusOverrides((current) => ({
+                                  ...current,
+                                  [assessment.id]: event.target.value as AssessmentSummary["status"],
+                                }))}
+                              value={currentStatus}
+                            >
+                              {assessment.status === "draft" ? (
+                                <option value="draft">Bản nháp</option>
+                              ) : (
+                                <>
+                                  <option value="open">Đang mở</option>
+                                  <option value="closed">Đã đóng</option>
+                                  <option value="archived">Đã lưu trữ</option>
+                                </>
+                              )}
+                            </select>
+                            <AssessmentStatusSubmitButton />
+                          </form>
+                        </div>
+                        <form
+                          action={deleteAction}
+                          onSubmit={(event) => {
+                            const confirmed = window.confirm(
+                              "Thao tác này sẽ xóa bỏ hoàn toàn bài kiểm tra khỏi hệ thống và không thể phục hồi. Bạn có chắc chắn muốn tiếp tục không?",
+                            );
+
+                            if (!confirmed) {
+                              event.preventDefault();
+                            }
+                          }}
+                        >
+                          <input name="assessmentId" type="hidden" value={assessment.id} />
+                          <AssessmentDeleteSubmitButton />
                         </form>
                       </div>
-                      <form
-                        action={deleteAction}
-                        onSubmit={(event) => {
-                          const confirmed = window.confirm(
-                            "Thao tác này sẽ xóa bỏ hoàn toàn bài kiểm tra khỏi hệ thống và không thể phục hồi. Bạn có chắc chắn muốn tiếp tục không?",
-                          );
+                      {assessment.status === "draft" ? (
+                        <p className="mt-2 text-xs text-slate-600">
+                          Bài kiểm tra Bản nháp chỉ dùng để hỗ trợ học tập và không thể chuyển sang trạng thái chính thức.
+                        </p>
+                      ) : null}
+                    </article>
+                  );
+                })()
+              ))
+            )}
+          </div>
+        </section>
+      ) : null}
 
-                          if (!confirmed) {
-                            event.preventDefault();
-                          }
-                        }}
-                      >
-                        <input name="assessmentId" type="hidden" value={assessment.id} />
-                        <AssessmentDeleteSubmitButton />
-                      </form>
-                    </div>
-                    {assessment.status === "draft" ? (
-                      <p className="mt-2 text-xs text-slate-600">
-                        Bài kiểm tra Bản nháp chỉ dùng để hỗ trợ học tập và không thể chuyển sang trạng thái chính thức.
-                      </p>
-                    ) : null}
-                  </article>
-                );
-              })()
-            ))
-          )}
-        </div>
-      </section>
-
-      {actorRole === "teacher" ? (
-      <section className="rounded-lg border border-slate-200 bg-slate-50 p-5">
-        <h2 className="text-lg font-semibold text-slate-900">Tạo bài kiểm tra cho lớp học</h2>
-        <form action={createAction} className="mt-4 grid gap-3 md:grid-cols-2" data-testid="create-assessment-form">
+      {isTeacher ? (
+        <section className="rounded-lg border border-slate-200 bg-slate-50 p-5">
+          <h2 className="text-lg font-semibold text-slate-900">Tạo bài kiểm tra cho lớp học</h2>
+          <form action={createAction} className="mt-4 grid gap-3 md:grid-cols-2" data-testid="create-assessment-form">
           <label className="text-sm text-slate-700">
             Lớp học phần
             <select
               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
               name="classCoursePair"
-              onChange={(event) => setSelectedClassPair(event.target.value)}
+              onChange={(event) => {
+                setSelectedClassPair(event.target.value);
+                setSelectedQuestionIds([]);
+              }}
               required
               value={selectedClassPair}
             >
@@ -324,7 +552,13 @@ export function AssessmentManagementClient({
             <select
               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
               name="deliveryMode"
-              onChange={(event) => setDeliveryMode(event.target.value as "external" | "internal")}
+              onChange={(event) => {
+                const nextMode = event.target.value as "external" | "internal";
+                setDeliveryMode(nextMode);
+                if (nextMode === "external") {
+                  setSelectedQuestionIds([]);
+                }
+              }}
               value={deliveryMode}
             >
               <option value="external">Biểu mẫu ngoài</option>
@@ -337,9 +571,12 @@ export function AssessmentManagementClient({
             <select
               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
               name="assessmentComponentType"
-              onChange={(event) => setSelectedAssessmentComponentType(event.target.value)}
+              onChange={(event) => {
+                setSelectedAssessmentComponentType(event.target.value);
+                setSelectedQuestionIds([]);
+              }}
               required
-              value={selectedAssessmentComponentType}
+              value={effectiveSelectedAssessmentComponentType}
             >
               <option value="">Chọn thành phần đánh giá</option>
               {selectedAssessmentComponents.map((component) => (
@@ -377,9 +614,9 @@ export function AssessmentManagementClient({
 
           <div className="rounded-md border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700">
             <p className="font-medium text-slate-900">CLO áp dụng cho bài kiểm tra</p>
-            {selectedAssessmentComponentType ? (
+            {effectiveSelectedAssessmentComponentType ? (
               (() => {
-                const selectedComponent = selectedAssessmentComponents.find((component) => component.type === selectedAssessmentComponentType);
+                const selectedComponent = selectedAssessmentComponents.find((component) => component.type === effectiveSelectedAssessmentComponentType);
                 const cloCodes = selectedComponent?.cloCodes ?? [];
 
                 return cloCodes.length > 0 ? (
@@ -476,33 +713,57 @@ export function AssessmentManagementClient({
             <span>Hiển thị phản hồi sau khi nộp bài nội bộ</span>
           </label>
 
-          <div className="md:col-span-2 rounded-lg border border-slate-200 bg-white p-4">
-            <h3 className="text-sm font-semibold text-slate-900">Chọn câu hỏi từ ngân hàng đề của học phần</h3>
-            {deliveryMode === "internal" ? (
-              <p className="mt-2 text-sm text-slate-600">
-                Các câu hỏi được chọn sẽ được snapshot vào bài kiểm tra nội bộ để phục vụ các phase làm bài, lưu đáp án và chấm điểm ngay trong website.
-              </p>
-            ) : null}
-            {!selectedCourseId ? (
-              <p className="mt-2 text-sm text-slate-500">Chọn lớp học trước để hiển thị ngân hàng đề tương ứng.</p>
-            ) : selectedQuestionBankItems.length === 0 ? (
-              <p className="mt-2 text-sm text-slate-500">Học phần này chưa có câu hỏi nào trong ngân hàng đề.</p>
-            ) : (
-              <div className="mt-3 space-y-2">
-                {selectedQuestionBankItems.map((item) => (
-                  <label className="flex items-start gap-2 text-sm text-slate-700" key={item.id}>
-                    <input name="questionId" type="checkbox" value={item.id} />
-                    <span>
-                      <span className="font-medium text-slate-900">{item.prompt}</span>
-                      <span className="mt-1 block text-xs text-slate-500">
-                        {questionTypeLabels[item.questionType] ?? item.questionType} | {difficultyLabels[item.difficulty] ?? item.difficulty} | {item.defaultPoints} điểm
-                      </span>
-                    </span>
-                  </label>
-                ))}
+          {deliveryMode === "internal" ? (
+            <>
+              <div className="md:col-span-2 grid gap-4 lg:grid-cols-3">
+                <QuestionStatisticsTable rows={cloStatisticRows} title="CLO" />
+                <QuestionStatisticsTable rows={chapterStatisticRows} title="Chương" />
+                <QuestionStatisticsTable rows={difficultyStatisticRows} title="Mức độ" />
               </div>
-            )}
-          </div>
+
+              <div className="md:col-span-2 rounded-lg border border-slate-200 bg-white p-4">
+                <h3 className="text-sm font-semibold text-slate-900">Chọn câu hỏi từ ngân hàng đề của học phần</h3>
+                <p className="mt-2 text-sm text-slate-600">
+                  Giảng viên chỉ chọn lại các câu hỏi đã có trong ngân hàng đề do GIÁM SÁT VIÊN quản lý. Hệ thống sẽ snapshot các câu hỏi được chọn vào bài kiểm tra nội bộ.
+                </p>
+                {!selectedCourseId ? (
+                  <p className="mt-2 text-sm text-slate-500">Chọn lớp học trước để hiển thị ngân hàng đề tương ứng.</p>
+                ) : availableQuestionBankItems.length === 0 ? (
+                  <p className="mt-2 text-sm text-slate-500">Học phần này chưa có câu hỏi khả dụng nào trong ngân hàng đề.</p>
+                ) : visibleQuestionBankItems.length === 0 ? (
+                  <p className="mt-2 text-sm text-slate-500">
+                    Chưa có câu hỏi khả dụng nào khớp với CLO áp dụng cho bài kiểm tra
+                    {selectedAssessmentCloCodes.length > 0 ? ` (${selectedAssessmentCloCodes.join(", ")}).` : "."}
+                  </p>
+                ) : (
+                  <div className="mt-3 space-y-2">
+                    {visibleQuestionBankItems.map((item) => (
+                      <label className="flex items-start gap-2 text-sm text-slate-700" key={item.id}>
+                        <input
+                          checked={selectedQuestionIds.includes(item.id)}
+                          name="questionId"
+                          onChange={(event) => {
+                            const nextChecked = event.target.checked;
+                            setSelectedQuestionIds((current) =>
+                              nextChecked ? [...current, item.id] : current.filter((questionId) => questionId !== item.id),
+                            );
+                          }}
+                          type="checkbox"
+                          value={item.id}
+                        />
+                        <span>
+                          <span className="font-medium text-slate-900">{item.prompt}</span>
+                          <span className="mt-1 block text-xs text-slate-500">
+                            {formatQuestionBankMetadata(item)}
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          ) : null}
 
           <div className="md:col-span-2">
             <button className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-60" disabled={isPending} type="submit">
@@ -516,7 +777,7 @@ export function AssessmentManagementClient({
             {createState.message}
           </p>
         ) : null}
-      </section>
+        </section>
       ) : null}
 
       {statusUpdateState.message ? (
@@ -531,153 +792,363 @@ export function AssessmentManagementClient({
         </p>
       ) : null}
 
-      {actorRole === "teacher" || actorRole === "moderator" || actorRole === "admin" ? (
-        <section className="rounded-lg border border-slate-200 bg-white p-5">
-          <h2 className="text-lg font-semibold text-slate-900">Ngân hàng đề thi theo học phần</h2>
-          <p className="mt-2 text-sm text-slate-600">
-            Mỗi học phần có một kho câu hỏi riêng. Giảng viên có thể tạo câu hỏi ở đây rồi chọn lại khi tạo bài kiểm tra cho lớp học.
-          </p>
-
-          <form action={questionBankAction} className="mt-4 grid gap-3 md:grid-cols-2">
-            <label className="text-sm text-slate-700">
-              Học phần
-              <select className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="courseId" required>
-                <option value="">Chọn học phần</option>
+      {isModerator ? (
+        <>
+          {showModeratorQuestionBankCatalog ? (
+            <section className="rounded-lg border border-slate-200 bg-white p-5">
+              <h2 className="text-lg font-semibold text-slate-900">Danh sách ngân hàng đề thi</h2>
+              <div className="mt-4 flex flex-wrap gap-3">
                 {questionBankByCourse.map((course) => (
-                  <option key={course.courseId} value={course.courseId}>
+                  <Link
+                    className={course.courseId === selectedQuestionBankCourseId
+                      ? "rounded-md border border-teal-300 bg-teal-50 px-4 py-2 text-sm font-medium text-teal-900"
+                      : "rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"}
+                    href={`/assessments/question-bank/${course.courseId}`}
+                    key={course.courseId}
+                  >
                     {course.courseCode} - {course.courseTitle}
-                  </option>
+                  </Link>
                 ))}
-              </select>
-            </label>
-
-            <label className="text-sm text-slate-700">
-              Loại câu hỏi
-              <select
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                name="questionBuilderType"
-                onChange={(event) => setQuestionBuilderType(event.target.value as typeof questionBuilderType)}
-                value={questionBuilderType}
-              >
-                <option value="multiple_choice_single">Nhiều lựa chọn</option>
-                <option value="multiple_choice_multiple">Nhiều đáp án</option>
-                <option value="true_false">Đúng/Sai</option>
-                <option value="short_answer">Trả lời ngắn</option>
-                <option value="essay">Tự luận</option>
-              </select>
-            </label>
-
-            <label className="text-sm text-slate-700 md:col-span-2">
-              Nội dung câu hỏi
-              {questionBuilderType === "essay" ? (
-                <textarea className="mt-1 min-h-28 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="prompt" placeholder="Nhập nội dung câu hỏi" required />
-              ) : (
-                <input className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="prompt" placeholder="Nhập nội dung câu hỏi" required />
-              )}
-            </label>
-
-            {questionBuilderType === "multiple_choice_single" || questionBuilderType === "multiple_choice_multiple" ? (
-              <div className="md:col-span-2 space-y-3">
-                <p className="text-sm font-medium text-slate-700">Đáp án lựa chọn</p>
-                {[1, 2, 3, 4].map((index) => (
-                  <div className="flex items-center gap-3" key={index}>
-                    <input
-                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                      name={`choice${index}`}
-                      placeholder={`Đáp án ${index}`}
-                      type="text"
-                    />
-                    <label className="flex items-center gap-2 whitespace-nowrap text-sm text-slate-700">
-                      <input name={`choice${index}Correct`} type="checkbox" value="on" />
-                      <span>Đúng</span>
-                    </label>
-                  </div>
-                ))}
-                <p className="text-xs text-slate-500">
-                  {questionBuilderType === "multiple_choice_single"
-                    ? "Dạng Nhiều lựa chọn cần chọn đúng 1 đáp án."
-                    : "Dạng Nhiều đáp án có thể chọn nhiều đáp án đúng."}
-                </p>
               </div>
-            ) : null}
-
-            {questionBuilderType === "true_false" ? (
-              <label className="text-sm text-slate-700 md:col-span-2">
-                Đáp án đúng
-                <select className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" defaultValue="Đúng" name="trueFalseAnswerKey">
-                  <option value="Đúng">Đúng</option>
-                  <option value="Sai">Sai</option>
-                </select>
-              </label>
-            ) : null}
-
-            {questionBuilderType === "short_answer" ? (
-              <label className="text-sm text-slate-700 md:col-span-2">
-                Đáp án đúng
-                <input className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" name="shortAnswerKey" placeholder="Nhập đáp án đúng" type="text" />
-              </label>
-            ) : null}
-
-            <label className="text-sm text-slate-700 md:col-span-2">
-              Hướng dẫn và gợi ý
-              <textarea
-                className="mt-1 min-h-24 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                name="explanation"
-                placeholder="Nội dung hiển thị cho sinh viên khi trả lời sai để ôn tập lại."
-              />
-            </label>
-
-            <label className="text-sm text-slate-700">
-              Độ khó
-              <select className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" defaultValue="medium" name="difficulty">
-                <option value="easy">Dễ</option>
-                <option value="medium">Trung bình</option>
-                <option value="hard">Khó</option>
-              </select>
-            </label>
-
-            <label className="text-sm text-slate-700">
-              Điểm mặc định
-              <input className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" defaultValue="1" min="1" name="defaultPoints" type="number" />
-            </label>
-
-            <div className="md:col-span-2">
-              <button className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60" disabled={isQuestionBankPending} type="submit">
-                {isQuestionBankPending ? "Đang lưu..." : "Thêm câu hỏi vào ngân hàng đề"}
-              </button>
-            </div>
-          </form>
-
-          {questionBankState.message ? (
-            <p className={questionBankState.status === "error" ? "mt-3 text-sm text-red-600" : "mt-3 text-sm text-emerald-700"}>
-              {questionBankState.message}
-            </p>
+            </section>
           ) : null}
 
-          <div className="mt-6 space-y-4">
-            {questionBankByCourse.map((course) => (
-              <article className="rounded-lg border border-slate-200 p-4" key={course.courseId}>
-                <h3 className="font-semibold text-slate-900">{course.courseCode} - {course.courseTitle}</h3>
-                {course.items.length === 0 ? (
-                  <p className="mt-2 text-sm text-slate-500">Chưa có câu hỏi nào trong học phần này.</p>
-                ) : (
-                  <ul className="mt-3 space-y-2">
-                    {course.items.map((item) => (
-                      <li className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700" key={item.id}>
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                          <span>{getQuestionTypeLabel(item)}</span>
-                          <span>{difficultyLabels[item.difficulty] ?? item.difficulty}</span>
-                          <span>{item.defaultPoints} điểm</span>
-                        </div>
-                        <p className="mt-1 text-slate-900">{item.prompt}</p>
-                      </li>
+          {showModeratorQuestionBankCreate ? (
+            <section className="rounded-lg border border-slate-200 bg-white p-5">
+              <h2 className="text-lg font-semibold text-slate-900">Tạo câu hỏi</h2>
+              <form action={questionBankAction} className="mt-4 grid gap-3 md:grid-cols-2">
+                <label className="text-sm text-slate-700">
+                  Học phần
+                  <select
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    name="courseId"
+                    onChange={(event) => {
+                      setSelectedQuestionBankCourseForForm(event.target.value);
+                      setSelectedQuestionBankCloCode("");
+                    }}
+                    required
+                    value={selectedQuestionBankCourseForForm}
+                  >
+                    <option value="">Chọn học phần</option>
+                    {questionBankByCourse.map((course) => (
+                      <option key={course.courseId} value={course.courseId}>
+                        {course.courseCode} - {course.courseTitle}
+                      </option>
                     ))}
-                  </ul>
-                )}
-              </article>
-            ))}
-          </div>
-        </section>
+                  </select>
+                </label>
+
+                <label className="text-sm text-slate-700">
+                  Loại câu hỏi
+                  <span className="ml-2 text-xs text-slate-500">
+                    Mức độ sẽ được giới hạn theo dạng câu hỏi.
+                  </span>
+                  <select
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    name="questionBuilderType"
+                    onChange={(event) => {
+                      const nextType = event.target.value as typeof questionBuilderType;
+                      const nextAllowedDifficulties = allowedDifficultiesByQuestionBuilderType[nextType];
+                      const nextDifficulty = nextAllowedDifficulties.includes(questionDifficulty)
+                        ? questionDifficulty
+                        : nextAllowedDifficulties[0];
+
+                      setQuestionBuilderType(nextType);
+                      setQuestionDifficulty(nextDifficulty);
+                      setDefaultPointsValue(String(difficultyDefaultPoints[nextDifficulty]));
+                    }}
+                    value={questionBuilderType}
+                  >
+                    <option value="multiple_choice_single">Nhiều lựa chọn</option>
+                    <option value="multiple_choice_multiple">Nhiều đáp án</option>
+                    <option value="true_false">Đúng/Sai</option>
+                    <option value="short_answer">Trả lời ngắn</option>
+                    <option value="essay">Tự luận</option>
+                  </select>
+                </label>
+
+                <label className="text-sm text-slate-700 md:col-span-2">
+                  Nội dung câu hỏi
+                  {questionBuilderType === "essay" ? (
+                    <textarea
+                      className="mt-1 min-h-28 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                      name="prompt"
+                      onChange={(event) => setQuestionPromptValue(event.target.value)}
+                      placeholder="Nhập nội dung câu hỏi"
+                      required
+                      value={questionPromptValue}
+                    />
+                  ) : (
+                    <input
+                      className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                      name="prompt"
+                      onChange={(event) => setQuestionPromptValue(event.target.value)}
+                      placeholder="Nhập nội dung câu hỏi"
+                      required
+                      value={questionPromptValue}
+                    />
+                  )}
+                </label>
+
+                {questionBuilderType === "multiple_choice_single" || questionBuilderType === "multiple_choice_multiple" ? (
+                  <div className="md:col-span-2 space-y-3">
+                    <p className="text-sm font-medium text-slate-700">Đáp án lựa chọn</p>
+                    {choiceRows.map((row, index) => (
+                      <div className="flex items-center gap-3" key={row.id}>
+                        <input name="choiceRowId" type="hidden" value={row.id} />
+                        <input
+                          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                          name={`choiceText__${row.id}`}
+                          onChange={(event) => {
+                            const nextValue = event.target.value;
+                            setChoiceRows((current) => current.map((item) => item.id === row.id ? { ...item, text: nextValue } : item));
+                          }}
+                          placeholder={`Đáp án ${index + 1}`}
+                          type="text"
+                          value={row.text}
+                        />
+                        <label className="flex items-center gap-2 whitespace-nowrap text-sm text-slate-700">
+                          <input
+                            checked={row.isCorrect}
+                            name={`choiceCorrect__${row.id}`}
+                            onChange={(event) => {
+                              const nextChecked = event.target.checked;
+                              setChoiceRows((current) => current.map((item) => item.id === row.id ? { ...item, isCorrect: nextChecked } : item));
+                            }}
+                            type="checkbox"
+                            value="on"
+                          />
+                          <span>Đúng</span>
+                        </label>
+                        {choiceRows.length > 2 ? (
+                          <button
+                            className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setChoiceRows((current) => current.filter((item) => item.id !== row.id));
+                            }}
+                            type="button"
+                          >
+                            Bỏ
+                          </button>
+                        ) : null}
+                      </div>
+                    ))}
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          setChoiceRows((current) => [...current, { id: `${Date.now()}-${current.length + 1}`, text: "", isCorrect: false }]);
+                        }}
+                        type="button"
+                      >
+                        Thêm đáp án
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      {questionBuilderType === "multiple_choice_single"
+                        ? "Dạng Nhiều lựa chọn cần chọn đúng 1 đáp án."
+                        : "Dạng Nhiều đáp án có thể chọn nhiều đáp án đúng và có thể thêm hơn 4 đáp án."}
+                    </p>
+                  </div>
+                ) : null}
+
+                {questionBuilderType === "true_false" ? (
+                  <label className="text-sm text-slate-700 md:col-span-2">
+                    Đáp án đúng
+                    <select
+                      className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                      name="trueFalseAnswerKey"
+                      onChange={(event) => setTrueFalseAnswerKey(event.target.value)}
+                      value={trueFalseAnswerKey}
+                    >
+                      <option value="Đúng">Đúng</option>
+                      <option value="Sai">Sai</option>
+                    </select>
+                  </label>
+                ) : null}
+
+                {questionBuilderType === "short_answer" ? (
+                  <label className="text-sm text-slate-700 md:col-span-2">
+                    Đáp án đúng
+                    <input
+                      className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                      name="shortAnswerKey"
+                      onChange={(event) => setShortAnswerKeyValue(event.target.value)}
+                      placeholder="Nhập đáp án đúng"
+                      type="text"
+                      value={shortAnswerKeyValue}
+                    />
+                  </label>
+                ) : null}
+
+                <label className="text-sm text-slate-700 md:col-span-2">
+                  Ghi chú nội bộ
+                  <textarea
+                    className="mt-1 min-h-24 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    name="explanation"
+                    onChange={(event) => setExplanationValue(event.target.value)}
+                    placeholder="Ghi chú nội bộ cho người soạn đề. Nội dung này không hiển thị trong bài kiểm tra hoặc kết quả của sinh viên."
+                    value={explanationValue}
+                  />
+                </label>
+
+                <label className="text-sm text-slate-700">
+                  Chuẩn đầu ra
+                  <select
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    name="cloCode"
+                    onChange={(event) => setSelectedQuestionBankCloCode(event.target.value)}
+                    value={selectedQuestionBankCloCode}
+                  >
+                    <option value="">Chưa gắn CLO</option>
+                    {(selectedModeratorCourseMetadata?.cloItems ?? []).map((clo) => (
+                      <option key={clo.code} value={clo.code}>
+                        {clo.code}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="text-sm text-slate-700">
+                  Chương
+                  <input
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    name="chapterLabel"
+                    onChange={(event) => setChapterLabelValue(event.target.value)}
+                    placeholder="Ví dụ: 2"
+                    value={chapterLabelValue}
+                  />
+                </label>
+
+                <label className="text-sm text-slate-700">
+                  Mức độ
+                  <select
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    name="difficulty"
+                    onChange={(event) => {
+                      const nextDifficulty = event.target.value as QuestionDifficulty;
+                      setQuestionDifficulty(nextDifficulty);
+                      setDefaultPointsValue(String(difficultyDefaultPoints[nextDifficulty]));
+                    }}
+                    value={questionDifficulty}
+                  >
+                    {availableQuestionDifficulties.map((difficulty) => (
+                      <option key={difficulty} value={difficulty}>
+                        {difficultyLabels[difficulty]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="text-sm text-slate-700">
+                  Điểm mặc định
+                  <input
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    min="1"
+                    name="defaultPoints"
+                    onChange={(event) => setDefaultPointsValue(event.target.value)}
+                    type="number"
+                    value={defaultPointsValue}
+                  />
+                </label>
+
+                <div className="md:col-span-2">
+                  <button className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60" disabled={isQuestionBankPending} type="submit">
+                    {isQuestionBankPending ? "Đang lưu..." : "Thêm câu hỏi vào ngân hàng đề"}
+                  </button>
+                </div>
+              </form>
+
+              {questionBankState.message ? (
+                <p className={questionBankState.status === "error" ? "mt-3 text-sm text-red-600" : "mt-3 text-sm text-emerald-700"}>
+                  {questionBankState.message}
+                </p>
+              ) : null}
+            </section>
+          ) : null}
+
+          {showModeratorQuestionBankDetail && selectedQuestionBankCourseBundle ? (
+            <div className="mt-6">
+              {selectedQuestionBankCourseBundle.items.length === 0 ? (
+                <p className="mt-3 text-sm text-slate-500">Học phần này chưa có câu hỏi nào.</p>
+              ) : (
+                <div className="mt-4 overflow-x-auto">
+                  <table className="min-w-full table-fixed border-collapse text-sm">
+                    <thead>
+                      <tr className="bg-white text-slate-700">
+                        <th className="w-[6%] border border-slate-300 px-3 py-2 text-center">STT</th>
+                        <th className="w-[50%] border border-slate-300 px-3 py-2 text-center">Nội dung</th>
+                        <th className="w-[9%] border border-slate-300 px-3 py-2 text-center">Loại</th>
+                        <th className="w-[7%] border border-slate-300 px-3 py-2 text-center">CLO</th>
+                        <th className="w-[9%] border border-slate-300 px-3 py-2 text-center">Chương</th>
+                        <th className="w-[8%] border border-slate-300 px-3 py-2 text-center">Mức độ</th>
+                        <th className="w-[6%] border border-slate-300 px-3 py-2 text-center">Điểm</th>
+                        <th className="w-[5%] border border-slate-300 px-3 py-2 text-center">Khả dụng</th>
+                        <th className="w-[9%] border border-slate-300 px-3 py-2 text-center">Xóa</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedQuestionBankCourseBundle.items.map((item, index) => (
+                        <tr className="align-top" key={item.id}>
+                          <td className="border border-slate-300 px-3 py-2 text-center">{index + 1}</td>
+                          <td className="border border-slate-300 px-3 py-2">
+                            <p className="font-medium text-slate-900">{item.prompt}</p>
+                          </td>
+                          <td className="border border-slate-300 px-3 py-2 text-center">{getQuestionTypeLabel(item)}</td>
+                          <td className="border border-slate-300 px-3 py-2 text-center">{item.cloCode ?? "-"}</td>
+                          <td className="border border-slate-300 px-3 py-2 text-center">{item.chapterLabel ?? "-"}</td>
+                          <td className="border border-slate-300 px-3 py-2 text-center">{difficultyLabels[item.difficulty] ?? item.difficulty}</td>
+                          <td className="border border-slate-300 px-3 py-2 text-center">{item.defaultPoints}</td>
+                          <td className="border border-slate-300 px-3 py-2">
+                            <form action={updateQuestionBankItemAvailabilityAction} className="flex items-center justify-center">
+                              <input name="courseId" type="hidden" value={selectedQuestionBankCourseBundle.courseId} />
+                              <input name="questionBankItemId" type="hidden" value={item.id} />
+                              <label className="flex items-center justify-center">
+                                <input
+                                  defaultChecked={item.isAvailable}
+                                  name="isAvailable"
+                                  onChange={(event) => event.currentTarget.form?.requestSubmit()}
+                                  type="checkbox"
+                                  value="on"
+                                />
+                                <span className="sr-only">{item.isAvailable ? "Khả dụng" : "Không khả dụng"}</span>
+                              </label>
+                              <button className="sr-only" type="submit">
+                                Lưu trạng thái khả dụng
+                              </button>
+                            </form>
+                          </td>
+                          <td className="border border-slate-300 px-3 py-2 text-center">
+                            <form
+                              action={deleteQuestionBankAction}
+                              onSubmit={(event) => {
+                                if (!window.confirm("Xóa câu hỏi này khỏi ngân hàng đề thi?")) {
+                                  event.preventDefault();
+                                }
+                              }}
+                            >
+                              <input name="courseId" type="hidden" value={selectedQuestionBankCourseBundle.courseId} />
+                              <input name="questionBankItemId" type="hidden" value={item.id} />
+                              <QuestionBankDeleteSubmitButton />
+                            </form>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          {deleteQuestionBankState.message ? (
+            <p className={deleteQuestionBankState.status === "error" ? "mt-3 text-sm text-red-600" : "mt-3 text-sm text-emerald-700"}>
+              {deleteQuestionBankState.message}
+            </p>
+          ) : null}
+        </>
       ) : null}
     </div>
   );

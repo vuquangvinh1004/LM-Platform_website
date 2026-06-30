@@ -10,7 +10,6 @@ logs/
 .pnpm-store/
 supabase/.temp/
 supabase/.branches/
-design.md-0.1.0/
 tsconfig.tsbuildinfo
 *.dump
 *.backup

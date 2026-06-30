@@ -1,4 +1,10 @@
-import { attachQuestionBankItemsToAssessment, createQuestionBankItem } from "@/lib/services/question-bank-service";
+import {
+  attachQuestionBankItemsToAssessment,
+  archiveQuestionBankItem,
+  createQuestionBankItem,
+  updateQuestionBankItem,
+  updateQuestionBankItemAvailability,
+} from "@/lib/services/question-bank-service";
 import { createAssessment, deleteAssessment, updateAssessmentStatus } from "@/lib/services/assessment-service";
 
 export type AssessmentMutationActor = {
@@ -76,14 +82,18 @@ export async function createAssessmentCommand(input: AssessmentMutationActor & {
   return { ok: true, assessmentId: result.data.id };
 }
 
-export async function createQuestionBankItemCommand(input: AssessmentMutationActor & {
+export async function createQuestionBankItemCommand(input: {
+  actorId: string;
+  actorRole: "moderator";
   courseId: string;
   prompt: string;
   questionType: "multiple_choice" | "true_false" | "short_answer" | "essay";
   choices: string[];
   answerKey: unknown;
   explanation?: string;
-  difficulty: "easy" | "medium" | "hard";
+  cloCode?: string;
+  chapterLabel?: string;
+  difficulty: "remembering" | "understanding" | "applying" | "analyzing" | "evaluating" | "creating";
   defaultPoints: number;
 }): Promise<{ ok: true } | { ok: false; message: string }> {
   const result = await createQuestionBankItem({
@@ -95,8 +105,80 @@ export async function createQuestionBankItemCommand(input: AssessmentMutationAct
     choices: input.choices,
     answerKey: input.answerKey,
     explanation: input.explanation,
+    cloCode: input.cloCode,
+    chapterLabel: input.chapterLabel,
     difficulty: input.difficulty,
     defaultPoints: input.defaultPoints,
+  });
+
+  if (!result.ok) {
+    return { ok: false, message: result.error.message };
+  }
+
+  return { ok: true };
+}
+
+export async function updateQuestionBankItemCommand(input: {
+  actorId: string;
+  actorRole: "moderator";
+  questionBankItemId: string;
+  prompt: string;
+  questionType: "multiple_choice" | "true_false" | "short_answer" | "essay";
+  choices: string[];
+  answerKey: unknown;
+  explanation?: string;
+  cloCode?: string;
+  chapterLabel?: string;
+  difficulty: "remembering" | "understanding" | "applying" | "analyzing" | "evaluating" | "creating";
+  defaultPoints: number;
+}): Promise<{ ok: true } | { ok: false; message: string }> {
+  const result = await updateQuestionBankItem({
+    actorId: input.actorId,
+    actorRole: input.actorRole,
+    questionBankItemId: input.questionBankItemId,
+    prompt: input.prompt,
+    questionType: input.questionType,
+    choices: input.choices,
+    answerKey: input.answerKey,
+    explanation: input.explanation,
+    cloCode: input.cloCode,
+    chapterLabel: input.chapterLabel,
+    difficulty: input.difficulty,
+    defaultPoints: input.defaultPoints,
+  });
+
+  if (!result.ok) {
+    return { ok: false, message: result.error.message };
+  }
+
+  return { ok: true };
+}
+
+export async function updateQuestionBankItemAvailabilityCommand(input: {
+  actorRole: "moderator";
+  questionBankItemId: string;
+  isAvailable: boolean;
+}): Promise<{ ok: true } | { ok: false; message: string }> {
+  const result = await updateQuestionBankItemAvailability({
+    actorRole: input.actorRole,
+    questionBankItemId: input.questionBankItemId,
+    isAvailable: input.isAvailable,
+  });
+
+  if (!result.ok) {
+    return { ok: false, message: result.error.message };
+  }
+
+  return { ok: true };
+}
+
+export async function deleteQuestionBankItemCommand(input: {
+  actorRole: "moderator";
+  questionBankItemId: string;
+}): Promise<{ ok: true } | { ok: false; message: string }> {
+  const result = await archiveQuestionBankItem({
+    actorRole: input.actorRole,
+    questionBankItemId: input.questionBankItemId,
   });
 
   if (!result.ok) {

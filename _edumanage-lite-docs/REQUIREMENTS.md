@@ -80,9 +80,13 @@ Người dùng hiện gặp các vấn đề sau:
 
 ### 5.4. Module 4: Bài kiểm tra và kết quả
 
-- Giảng viên tạo bài kiểm tra, gắn Google Form hoặc Microsoft Form.
-- Mỗi học phần có ngân hàng đề thi riêng để giảng viên tạo và tái sử dụng câu hỏi.
-- Giảng viên có thể lấy câu hỏi từ ngân hàng đề của học phần và gắn vào bài kiểm tra của lớp.
+- Giảng viên tạo bài kiểm tra ở hai mode: `Biểu mẫu ngoài` hoặc `Làm trực tiếp trong website`.
+- Mỗi học phần có ngân hàng đề thi riêng do Moderator quản lý; giảng viên không tạo câu hỏi trực tiếp trong ngân hàng đề.
+- Giảng viên chỉ có thể lấy câu hỏi đang `Khả dụng` từ ngân hàng đề của đúng học phần để gắn vào bài kiểm tra `Làm trực tiếp trong website`.
+- Nếu bài kiểm tra có CLO áp dụng, danh sách câu hỏi cho giảng viên chỉ hiển thị các câu hỏi có CLO khớp để tránh chọn nhầm.
+- Khi giảng viên chọn câu hỏi cho bài kiểm tra nội bộ, hệ thống hiển thị thêm bảng thống kê theo `CLO`, `Chương`, `Mức độ` với `Số câu`, `Điểm`, `Tỷ lệ`.
+- Câu hỏi ngân hàng đề có metadata `CLO`, `Chương`, `Mức độ`, `Điểm`, cờ `Khả dụng` và ghi chú nội bộ không hiển thị cho sinh viên.
+- `Mức độ` dùng 6 mức Bloom cải tiến: `Nhớ`, `Hiểu`, `Vận dụng`, `Phân tích`, `Đánh giá`, `Sáng tạo`; điểm mặc định lần lượt là `1`, `2`, `4`, `6`, `8`, `10` nhưng Mod vẫn có thể chỉnh.
 - Khi tạo bài kiểm tra, giảng viên phải chọn một thành phần đánh giá cố định: `diagnostic`, `frequent`, `periodic`, `final`.
 - Thành phần đánh giá của học phần có thể gắn nhiều CLO; assessment snapshot lại danh sách CLO tương ứng tại thời điểm tạo để phục vụ import/export kết quả ổn định.
 - Lưu tên bài, mô tả, loại form, link form, hạn làm bài, trạng thái mở/đóng.

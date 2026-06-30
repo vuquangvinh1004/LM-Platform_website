@@ -636,14 +636,24 @@ Ngan hang de thi theo hoc phan.
 | `created_by` | uuid | Có | FK `profiles.id` |
 | `prompt` | text | Có | Noi dung cau hoi |
 | `question_type` | text | Có | `multiple_choice`, `true_false`, `short_answer`, `essay` |
-| `choices` | text[] | Không | Lua chon dap an neu can |
-| `answer_key` | jsonb | Không | Dap an dung |
-| `explanation` | text | Không | Giai thich |
-| `difficulty` | text | Có | `easy`, `medium`, `hard` |
+| `choices` | text[] | Không | Lua chon dap an neu can; UI cho phep them dong dap an dong |
+| `answer_key` | jsonb | Không | Dap an dung; `multiple_choice` co the mang 1 dap an dung (`Nhiều lựa chọn`) hoac nhieu dap an dung (`Nhiều đáp án`) |
+| `explanation` | text | Không | Ghi chu noi bo cho nguoi soan de; khong hien thi cho sinh vien trong bai kiem tra |
+| `clo_code` | text | Không | CLO duoc gan cho cau hoi |
+| `chapter_label` | text | Không | So chuong/ky hieu chuong do Mod nhap |
+| `difficulty` | text | Có | `remembering`, `understanding`, `applying`, `analyzing`, `evaluating`, `creating` |
 | `default_points` | numeric | Có | Diem mac dinh |
+| `is_available` | boolean | Có | Cờ cho phep giang vien nhin thay va chon cau hoi khi tao assessment noi bo |
 | `status` | text | Có | `active`, `archived` |
 | `created_at` | timestamptz | Có | Default now |
 | `updated_at` | timestamptz | Có | Auto update |
+
+Quy tac:
+
+- Chi `moderator` duoc tao/sua doi voi `question_bank_items`; `teacher` chi doc de chon cau hoi vao assessment noi bo.
+- Migration `202606300001_question_bank_item_metadata_and_availability.sql` bo sung `clo_code`, `chapter_label`, `is_available`.
+- Migration `202606300002_question_bank_bloom_difficulty_scale.sql` chuyen `difficulty` sang thang Bloom 6 muc.
+- Migration `202606300003_question_bank_backfill_legacy_availability.sql` bat lai `is_available = true` cho cac cau hoi `active` cu bi false do loi lich su.
 
 ## 10B. Bảng `assessment_question_links`
 
@@ -659,7 +669,7 @@ Lien ket cau hoi ngan hang de voi assessment cua lop hoc.
 | `snapshot_question_type` | text | Có | Snapshot loai cau hoi |
 | `snapshot_choices` | jsonb | Không | Snapshot lua chon |
 | `snapshot_answer_key` | jsonb | Không | Snapshot dap an |
-| `snapshot_explanation` | text | Không | Snapshot giai thich |
+| `snapshot_explanation` | text | Không | Snapshot ghi chu noi bo; khong render cho sinh vien |
 
 ---
 
@@ -1221,4 +1231,4 @@ Trước khi thay đổi schema, AI Agent phải trả lời:
 
 - Schema đã bao phủ đầy đủ user management, course, class, material, simulation, classroom room, library, assessment external/internal, submission import/export và dashboard mirror.
 - Phần assessment hiện đã có mode `external` và `internal`, cùng runtime tables cho attempt/answer/score để hỗ trợ làm bài và chấm điểm nội bộ.
-- Các thay đổi gần đây tập trung vào dữ liệu kết quả theo `student_identifier`/`student code`, mirror `course_assessment_results`, và các bảng phục vụ hardening vận hành như `class_resource_links`, `library_change_requests`, `student_profile_stats`.
+- Các thay đổi gần đây tập trung vào dữ liệu kết quả theo `student_identifier`/`student code`, mirror `course_assessment_results`, metadata ngân hàng đề (`clo_code`, `chapter_label`, `is_available`, Bloom 6 mức) và các bảng phục vụ hardening vận hành như `class_resource_links`, `library_change_requests`, `student_profile_stats`.

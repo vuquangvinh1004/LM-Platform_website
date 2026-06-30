@@ -108,7 +108,7 @@ AI Agent cần ưu tiên thêm/reuse các service sau khi build UI:
 
 ## 7. Yêu cầu UI implementation
 
-- Dùng token trong DESIGN.md, không hardcode palette ngẫu nhiên.
+- Dùng token trong `_edumanage-lite-docs/DESIGN.md`, không hardcode palette ngẫu nhiên.
 - Responsive: desktop hiển thị đầy đủ sơ đồ; mobile chuyển sang block vertical nhưng giữ thứ tự bàn.
 - Accessibility: bàn sinh viên có focus state, keyboard navigation, aria-label rõ ràng.
 - Không query Supabase trực tiếp trong client component cho business rules.

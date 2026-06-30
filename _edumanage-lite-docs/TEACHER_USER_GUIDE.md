@@ -61,8 +61,14 @@ Sau thao tac thanh cong, he thong hien flash message va ghi activity log cho han
 ## 5. Quan ly bai kiem tra va ket qua
 
 1. Vao trang bai kiem tra: `/assessments`.
-2. Tao bai kiem tra voi provider phu hop (Google Form/Microsoft Form) hoac chon mode noi bo neu giao dien/contract hien thi.
-3. Vao trang ket qua assessment de theo doi submissions va ket qua tong hop.
+2. Chon `Hinh thuc bai kiem tra`:
+   - `Bieu mau ngoai`: nhap link Google Form / Microsoft Form / nguon ngoai; khung chon cau hoi tu ngan hang de se duoc an.
+   - `Lam truc tiep trong website`: he thong hien khung chon cau hoi tu ngan hang de cua dung hoc phan.
+3. Neu tao bai kiem tra noi bo:
+   - Chi nhin thay cau hoi dang `Kha dung` va khop `CLO ap dung cho bai kiem tra` neu assessment component co gan CLO.
+   - Moi cau hoi hien metadata gon: `Loai | CLO | Chuong | Muc do | Diem`.
+   - Co 3 bang thong ke nho theo `CLO`, `Chuong`, `Muc do` de theo doi cau truc de tu tap cau hoi dang chon.
+4. Luu bai kiem tra va vao trang ket qua assessment de theo doi submissions va ket qua tong hop.
 
 ### 5.1. Export ket qua
 
@@ -113,7 +119,7 @@ Giang vien co the:
 Truoc khi import hang loat hoac release:
 
 1. Chay backup/export theo huong dan:
-   - xem OPERATIONS_BACKUP_EXPORT_CHECKLIST.md
+   - xem roadmap/ops/OPERATIONS_BACKUP_EXPORT_CHECKLIST.md
 2. Chay security scan:
    - pnpm security:scan
 
@@ -147,7 +153,7 @@ Moi release nen luu:
 - Backup manifest.
 - Quyet dinh go/no-go.
 
-Xem them: PRODUCTION_READINESS_CHECKLIST.md
+Xem them: roadmap/ops/PRODUCTION_READINESS_CHECKLIST.md
 
 ---
 

@@ -23,6 +23,7 @@ export function MaterialUploadClient({ actorRole, categories, courses }: Materia
   const [refreshNonce, setRefreshNonce] = useState(0);
   const isStaffUploader = actorRole === "moderator" || actorRole === "admin";
   const isModerator = actorRole === "moderator";
+  const isTeacher = actorRole === "teacher";
   const moderatorRole = getUserRolePresentation("moderator");
   const adminRole = getUserRolePresentation("admin");
 
@@ -140,14 +141,14 @@ export function MaterialUploadClient({ actorRole, categories, courses }: Materia
           </select>
         </label>
 
-        {!isModerator ? (
-        <label className="text-sm text-slate-700">
-          <span className="font-medium">Nhãn mục</span>
-          <input className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" data-testid="material-section-label" name="sectionLabel" placeholder="Ví dụ: Tuần 1" />
-        </label>
+        {!isTeacher && !isModerator ? (
+          <label className="text-sm text-slate-700">
+            <span className="font-medium">Nhãn mục</span>
+            <input className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" data-testid="material-section-label" name="sectionLabel" placeholder="Ví dụ: Tuần 1" />
+          </label>
         ) : null}
 
-        <label className={`text-sm text-slate-700 ${isModerator ? "" : "md:col-span-2"}`}>
+        <label className={`text-sm text-slate-700 ${!isTeacher && !isModerator ? "md:col-span-2" : ""}`}>
           <span className="font-medium">Tags</span>
           <input
             className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
@@ -156,7 +157,7 @@ export function MaterialUploadClient({ actorRole, categories, courses }: Materia
           />
         </label>
 
-        <div className="text-sm text-slate-700">
+        <div className="text-sm text-slate-700 md:col-span-2">
           <span className="font-medium">Tệp tài liệu</span>
           <div className="mt-1 flex w-full flex-wrap items-center gap-3 rounded-md border border-slate-300 px-3 py-2 text-sm">
             <label className="inline-flex cursor-pointer rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white" htmlFor="material-file-input">
@@ -176,7 +177,7 @@ export function MaterialUploadClient({ actorRole, categories, courses }: Materia
           </div>
         </div>
 
-        <label className="flex items-center gap-2 self-end rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700">
+        <label className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 md:col-span-2">
           <input data-testid="material-allow-download" defaultChecked name="allowDownload" type="checkbox" />
           Cho phép sinh viên tải xuống
         </label>

@@ -12,18 +12,20 @@ Trước khi code, đọc theo thứ tự:
 
 1. `START_HERE_FOR_AI_AGENT.md` (bạn đang đọc file này)
 2. `README.md`
-3. `ARCHITECTURE.md`
-4. `ROADMAP.md`
-5. `SPEC_FINAL.md`
-6. `REQUIREMENTS.md`
-7. `DATABASE_SCHEMA.md`
-8. `SERVICE_CONTRACT.md`
+3. `DESIGN.md`
+4. `ARCHITECTURE.md`
+5. `ROADMAP.md`
+6. `SPEC_FINAL.md`
+7. `REQUIREMENTS.md`
+8. `DATABASE_SCHEMA.md`
+9. `SERVICE_CONTRACT.md`
 
 Không bắt đầu code nếu chưa xác định task thuộc phase/sprint nào trong roadmap.
 
 Task-specific docs bo sung:
 
-- Neu task thuoc redesign lop hoc truc quan (Sprint 5.1), bat buoc doc them `_Giao_dien_lop_hoc.md` va `SPRINT_5_1_CLASSROOM_VISUAL_BACKLOG.md` truoc khi code.
+- Neu task thuoc redesign lop hoc truc quan (Sprint 5.1), bat buoc doc them `_Giao_dien_lop_hoc.md` va `roadmap/plans/SPRINT_5_1_CLASSROOM_VISUAL_BACKLOG.md` truoc khi code.
+- Neu task chạm UI/component/theme, bat buoc doi chieu them voi `DESIGN.md`.
 
 ---
 
@@ -180,6 +182,40 @@ Yêu cầu:
 - Viết test phù hợp.
 - Sau khi hoàn thành, cập nhật ROADMAP và CHANGELOG nếu cần.
 - Báo cáo files thay đổi, test result và rủi ro còn lại.
+```
+
+---
+
+## 8A. Prompt bootstrap ngắn cho Cursor/GitHub Copilot Agent
+
+Nếu cần một prompt ngắn để khởi tạo phiên làm việc trong agent tool, dùng trực tiếp mẫu dưới đây thay cho file riêng:
+
+```text
+Bạn là AI Agent phụ trách dự án LMP (Learning Management Platform).
+
+Bắt buộc đọc theo thứ tự:
+1. START_HERE_FOR_AI_AGENT.md
+2. README.md
+3. ARCHITECTURE.md
+4. ROADMAP.md
+5. SPEC_FINAL.md
+6. REQUIREMENTS.md
+7. DATABASE_SCHEMA.md
+8. SERVICE_CONTRACT.md
+
+Nếu nhiệm vụ liên quan thiết kế lại lớp học trực quan, đọc thêm:
+9. _Giao_dien_lop_hoc.md
+10. roadmap/plans/SPRINT_5_1_CLASSROOM_VISUAL_BACKLOG.md
+
+Nhiệm vụ đầu tiên:
+- Không code ngay.
+- Tóm tắt bản chất sản phẩm trong 10 dòng.
+- Xác định task thuộc phase/sprint nào.
+- Liệt kê files sẽ tạo/sửa.
+- Liệt kê migration/service contract/docs nào có thể bị chạm.
+- Nêu test cần chạy và rủi ro chính cần tránh.
+
+Chỉ bắt đầu code sau khi đã tóm tắt và chốt hướng tiếp cận.
 ```
 
 ---

@@ -9,6 +9,7 @@ Use these terms consistently across docs, UI labels, service names, and comments
 - `Phòng học` - the classroom room view for board, announcements, messages, sessions, and templates.
 - `Tài nguyên lớp` - class-scoped materials and simulations shared inside a room.
 - `Bài kiểm tra` - an assessment, either external or internal.
+- `Ngân hàng đề thi` - kho câu hỏi theo từng học phần do `moderator` quản lý; giảng viên chỉ chọn câu hỏi khả dụng từ đây khi tạo bài kiểm tra nội bộ.
 - `Thời hạn làm bài` - the submission gate time for a student to start an assessment.
 - `Thời gian làm bài còn lại` - the live countdown after a student starts an assessment.
 - `Kết quả bài kiểm tra` - the results page for one assessment.
@@ -21,6 +22,11 @@ Use these terms consistently across docs, UI labels, service names, and comments
 - `Duyệt tự động yêu cầu vào lớp` - cờ ở trang Quản lý lớp cho phép giảng viên tự động chấp nhận các yêu cầu tham gia lớp mới thay vì duyệt thủ công từng yêu cầu.
 - `Giảng viên` - the `teacher` role in code and service contracts; UI badge chuẩn là `GIẢNG VIÊN`.
 - `Giám sát viên` - the `moderator` role in code and service contracts; có thể viết tắt là `Mod` trong note kỹ thuật ngắn, nhưng UI badge chuẩn là `GIÁM SÁT VIÊN`.
+- `Khả dụng` - cờ `is_available` trên câu hỏi ngân hàng đề; chỉ câu hỏi đang khả dụng mới xuất hiện cho giảng viên khi tạo bài kiểm tra nội bộ.
+- `Mức độ` - thang Bloom cải tiến 6 mức dùng cho câu hỏi ngân hàng đề: `Nhớ`, `Hiểu`, `Vận dụng`, `Phân tích`, `Đánh giá`, `Sáng tạo`.
+- `Chương` - nhãn chương do Mod tự nhập để gom cấu trúc đề; thay cho cách ghi cũ `Chương/Phần`.
+- `Ghi chú nội bộ` - nội dung lưu trong `explanation` của câu hỏi ngân hàng đề; chỉ dành cho người soạn đề, không hiển thị cho sinh viên trong runtime hoặc kết quả.
+- `CLO áp dụng cho bài kiểm tra` - danh sách CLO được snapshot từ `assessment component` của học phần tại thời điểm giảng viên tạo bài kiểm tra; danh sách câu hỏi chọn từ ngân hàng đề phải khớp tập này nếu tập không rỗng.
 - `Quản trị viên` - the `admin` role in code and service contracts; UI badge chuẩn là `QUẢN TRỊ VIÊN`.
 - `Role code` - mã nhân sự dùng cho tài khoản `admin`, `moderator`, `teacher`, ví dụ `ADMIN`, `MOD123`, `LEC123`; thay cho thuật ngữ cũ `teacher_code`.
 - `Moderator (Mod)` - legacy English/code-facing alias of `Giám sát viên`; the operational role that creates/updates/archives/deletes courses directly, uploads or reviews shared-library resources tied to courses, links approved HTML simulations to courses, and monitors course-level results.

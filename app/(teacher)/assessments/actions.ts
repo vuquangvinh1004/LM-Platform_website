@@ -6,7 +6,10 @@ import { requireRole } from "@/lib/services/auth-service";
 import {
   createAssessmentCommand,
   createQuestionBankItemCommand,
+  deleteQuestionBankItemCommand,
   deleteAssessmentCommand,
+  updateQuestionBankItemAvailabilityCommand,
+  updateQuestionBankItemCommand,
   updateAssessmentStatusCommand,
 } from "@/lib/commands/assessment-commands";
 
@@ -35,6 +38,92 @@ function parseAssessmentCloCodes(rawValue: FormDataEntryValue | null): string[] 
   }
 }
 
+type QuestionDifficultyValue =
+  | "remembering"
+  | "understanding"
+  | "applying"
+  | "analyzing"
+  | "evaluating"
+  | "creating";
+
+type QuestionBuilderTypeValue =
+  | "multiple_choice_single"
+  | "multiple_choice_multiple"
+  | "true_false"
+  | "short_answer"
+  | "essay";
+
+const allowedDifficultiesByQuestionBuilderType: Record<QuestionBuilderTypeValue, QuestionDifficultyValue[]> = {
+  true_false: ["remembering", "understanding"],
+  multiple_choice_single: ["remembering", "understanding", "applying"],
+  multiple_choice_multiple: ["remembering", "understanding", "applying", "analyzing"],
+  short_answer: ["applying", "analyzing", "evaluating"],
+  essay: ["analyzing", "evaluating", "creating"],
+};
+
+const questionBuilderTypeLabels: Record<QuestionBuilderTypeValue, string> = {
+  true_false: "Đúng/Sai",
+  multiple_choice_single: "Nhiều lựa chọn",
+  multiple_choice_multiple: "Nhiều đáp án",
+  short_answer: "Trả lời ngắn",
+  essay: "Tự luận",
+};
+
+const questionDifficultyLabels: Record<QuestionDifficultyValue, string> = {
+  remembering: "Nhớ",
+  understanding: "Hiểu",
+  applying: "Vận dụng",
+  analyzing: "Phân tích",
+  evaluating: "Đánh giá",
+  creating: "Sáng tạo",
+};
+
+function parseQuestionDifficulty(rawValue: FormDataEntryValue | null): QuestionDifficultyValue {
+  const value = String(rawValue ?? "").trim();
+
+  if (
+    value === "remembering"
+    || value === "understanding"
+    || value === "applying"
+    || value === "analyzing"
+    || value === "evaluating"
+    || value === "creating"
+  ) {
+    return value;
+  }
+
+  return "remembering";
+}
+
+function parseQuestionBuilderType(rawValue: FormDataEntryValue | null): QuestionBuilderTypeValue {
+  const value = String(rawValue ?? "").trim();
+
+  if (
+    value === "multiple_choice_single"
+    || value === "multiple_choice_multiple"
+    || value === "true_false"
+    || value === "short_answer"
+    || value === "essay"
+  ) {
+    return value;
+  }
+
+  return "multiple_choice_single";
+}
+
+function validateQuestionDifficultyForType(
+  questionBuilderType: QuestionBuilderTypeValue,
+  difficulty: QuestionDifficultyValue,
+): string | null {
+  const allowed = allowedDifficultiesByQuestionBuilderType[questionBuilderType];
+
+  if (allowed.includes(difficulty)) {
+    return null;
+  }
+
+  return `Dạng câu hỏi ${questionBuilderTypeLabels[questionBuilderType]} chỉ được chọn mức độ ${allowed.map((value) => questionDifficultyLabels[value]).join("/")}.`;
+}
+
 function buildQuestionBankPayload(formData: FormData):
   | {
       ok: true;
@@ -44,6 +133,8 @@ function buildQuestionBankPayload(formData: FormData):
         choices: string[];
         answerKey: unknown;
         explanation?: string;
+        cloCode?: string;
+        chapterLabel?: string;
       };
     }
   | {
@@ -53,6 +144,8 @@ function buildQuestionBankPayload(formData: FormData):
   const questionBuilderType = String(formData.get("questionBuilderType") ?? "multiple_choice_single").trim();
   const prompt = String(formData.get("prompt") ?? "").trim();
   const explanation = String(formData.get("explanation") ?? "").trim() || undefined;
+  const cloCode = String(formData.get("cloCode") ?? "").trim() || undefined;
+  const chapterLabel = String(formData.get("chapterLabel") ?? "").trim() || undefined;
 
   if (!prompt) {
     return {
@@ -62,10 +155,11 @@ function buildQuestionBankPayload(formData: FormData):
   }
 
   if (questionBuilderType === "multiple_choice_single" || questionBuilderType === "multiple_choice_multiple") {
-    const entries = [1, 2, 3, 4]
-      .map((index) => ({
-        choice: String(formData.get(`choice${index}`) ?? "").trim(),
-        isCorrect: String(formData.get(`choice${index}Correct`) ?? "") === "on",
+    const choiceRowIds = formData.getAll("choiceRowId").map((value) => String(value).trim()).filter(Boolean);
+    const entries = choiceRowIds
+      .map((rowId) => ({
+        choice: String(formData.get(`choiceText__${rowId}`) ?? "").trim(),
+        isCorrect: String(formData.get(`choiceCorrect__${rowId}`) ?? "") === "on",
       }))
       .filter((entry) => entry.choice);
 
@@ -100,6 +194,8 @@ function buildQuestionBankPayload(formData: FormData):
         choices: entries.map((entry) => entry.choice),
         answerKey: questionBuilderType === "multiple_choice_single" ? correctChoices[0] : correctChoices,
         explanation,
+        cloCode,
+        chapterLabel,
       },
     };
   }
@@ -115,6 +211,8 @@ function buildQuestionBankPayload(formData: FormData):
         choices: ["Đúng", "Sai"],
         answerKey,
         explanation,
+        cloCode,
+        chapterLabel,
       },
     };
   }
@@ -128,6 +226,8 @@ function buildQuestionBankPayload(formData: FormData):
         choices: [],
         answerKey: String(formData.get("shortAnswerKey") ?? "").trim(),
         explanation,
+        cloCode,
+        chapterLabel,
       },
     };
   }
@@ -140,6 +240,8 @@ function buildQuestionBankPayload(formData: FormData):
       choices: [],
       answerKey: null,
       explanation,
+      cloCode,
+      chapterLabel,
     },
   };
 }
@@ -210,7 +312,7 @@ export async function createQuestionBankItemAction(
   _prevState: AssessmentActionState,
   formData: FormData,
 ): Promise<AssessmentActionState> {
-  const profileResult = await requireRole(["teacher", "moderator", "admin"]);
+  const profileResult = await requireRole(["moderator"]);
 
   if (!profileResult.ok) {
     return {
@@ -228,16 +330,29 @@ export async function createQuestionBankItemAction(
     };
   }
 
+  const questionBuilderType = parseQuestionBuilderType(formData.get("questionBuilderType"));
+  const difficulty = parseQuestionDifficulty(formData.get("difficulty"));
+  const difficultyValidationMessage = validateQuestionDifficultyForType(questionBuilderType, difficulty);
+
+  if (difficultyValidationMessage) {
+    return {
+      status: "error",
+      message: difficultyValidationMessage,
+    };
+  }
+
   const result = await createQuestionBankItemCommand({
     actorId: profileResult.data.id,
-    actorRole: profileResult.data.role as "teacher" | "moderator" | "admin",
+    actorRole: profileResult.data.role as "moderator",
     courseId: String(formData.get("courseId") ?? "").trim(),
     prompt: questionPayload.data.prompt,
     questionType: questionPayload.data.questionType,
     choices: questionPayload.data.choices,
     answerKey: questionPayload.data.answerKey,
     explanation: questionPayload.data.explanation,
-    difficulty: (formData.get("difficulty") as "easy" | "medium" | "hard" | null) ?? "medium",
+    cloCode: questionPayload.data.cloCode,
+    chapterLabel: questionPayload.data.chapterLabel,
+    difficulty,
     defaultPoints: Number(String(formData.get("defaultPoints") ?? "1")) || 1,
   });
 
@@ -253,6 +368,120 @@ export async function createQuestionBankItemAction(
   return {
     status: "success",
     message: "Đã thêm câu hỏi vào ngân hàng đề.",
+  };
+}
+
+export async function updateQuestionBankItemAction(
+  _prevState: AssessmentActionState,
+  formData: FormData,
+): Promise<AssessmentActionState> {
+  const profileResult = await requireRole(["moderator"]);
+
+  if (!profileResult.ok) {
+    return {
+      status: "error",
+      message: profileResult.error.message,
+    };
+  }
+
+  const questionPayload = buildQuestionBankPayload(formData);
+
+  if (!questionPayload.ok) {
+    return {
+      status: "error",
+      message: questionPayload.message,
+    };
+  }
+
+  const questionBuilderType = parseQuestionBuilderType(formData.get("questionBuilderType"));
+  const difficulty = parseQuestionDifficulty(formData.get("difficulty"));
+  const difficultyValidationMessage = validateQuestionDifficultyForType(questionBuilderType, difficulty);
+
+  if (difficultyValidationMessage) {
+    return {
+      status: "error",
+      message: difficultyValidationMessage,
+    };
+  }
+
+  const result = await updateQuestionBankItemCommand({
+    actorId: profileResult.data.id,
+    actorRole: profileResult.data.role as "moderator",
+    questionBankItemId: String(formData.get("questionBankItemId") ?? "").trim(),
+    prompt: questionPayload.data.prompt,
+    questionType: questionPayload.data.questionType,
+    choices: questionPayload.data.choices,
+    answerKey: questionPayload.data.answerKey,
+    explanation: questionPayload.data.explanation,
+    cloCode: questionPayload.data.cloCode,
+    chapterLabel: questionPayload.data.chapterLabel,
+    difficulty,
+    defaultPoints: Number(String(formData.get("defaultPoints") ?? "1")) || 1,
+  });
+
+  if (!result.ok) {
+    return {
+      status: "error",
+      message: result.message,
+    };
+  }
+
+  revalidatePaths(["/assessments"]);
+
+  return {
+    status: "success",
+    message: "Đã cập nhật câu hỏi trong ngân hàng đề.",
+  };
+}
+
+export async function updateQuestionBankItemAvailabilityAction(formData: FormData): Promise<void> {
+  const profileResult = await requireRole(["moderator"]);
+
+  if (!profileResult.ok) {
+    return;
+  }
+
+  await updateQuestionBankItemAvailabilityCommand({
+    actorRole: profileResult.data.role as "moderator",
+    questionBankItemId: String(formData.get("questionBankItemId") ?? "").trim(),
+    isAvailable: String(formData.get("isAvailable") ?? "") === "on",
+  });
+
+  const courseId = String(formData.get("courseId") ?? "").trim();
+  revalidatePaths(courseId ? ["/assessments", `/assessments/question-bank/${courseId}`] : ["/assessments"]);
+}
+
+export async function deleteQuestionBankItemAction(
+  _prevState: AssessmentActionState,
+  formData: FormData,
+): Promise<AssessmentActionState> {
+  const profileResult = await requireRole(["moderator"]);
+
+  if (!profileResult.ok) {
+    return {
+      status: "error",
+      message: profileResult.error.message,
+    };
+  }
+
+  const result = await deleteQuestionBankItemCommand({
+    actorRole: profileResult.data.role as "moderator",
+    questionBankItemId: String(formData.get("questionBankItemId") ?? "").trim(),
+  });
+
+  if (!result.ok) {
+    return {
+      status: "error",
+      message: result.message,
+    };
+  }
+
+  const courseId = String(formData.get("courseId") ?? "").trim();
+  revalidatePaths(courseId ? ["/assessments", `/assessments/question-bank/${courseId}`] : ["/assessments"]);
+
+  return {
+    status: "success",
+    message: "Đã xóa câu hỏi khỏi ngân hàng đề.",
   };
 }
 

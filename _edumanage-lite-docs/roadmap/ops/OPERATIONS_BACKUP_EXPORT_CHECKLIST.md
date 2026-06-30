@@ -6,7 +6,7 @@ Muc tieu: giam rui ro van hanh som bang quy trinh backup/export co the lap lai, 
 
 Tai lieu lien quan:
 
-- `PRODUCTION_READINESS_CHECKLIST.md` cho deploy + rollback + smoke test matrix.
+- `roadmap/ops/PRODUCTION_READINESS_CHECKLIST.md` cho deploy + rollback + smoke test matrix.
 
 ## 1. Pham vi backup quan trong
 

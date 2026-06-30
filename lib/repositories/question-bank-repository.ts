@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { CourseAssessmentResultItem, QuestionBankItem } from "@/lib/types/question-bank";
+import type { QuestionDifficulty } from "@/lib/types/question-bank";
 import type { SubmissionSource, SubmissionStatus } from "@/lib/types/submission";
 
 type QuestionBankRow = {
@@ -11,8 +12,11 @@ type QuestionBankRow = {
   choices: string[] | null;
   answer_key: unknown;
   explanation: string | null;
-  difficulty: "easy" | "medium" | "hard";
+  clo_code: string | null;
+  chapter_label: string | null;
+  difficulty: QuestionDifficulty;
   default_points: number;
+  is_available: boolean | null;
   status: "active" | "archived";
   created_at: string;
   updated_at: string;
@@ -47,8 +51,11 @@ function mapQuestionBankRow(row: QuestionBankRow): QuestionBankItem {
     choices: row.choices ?? [],
     answerKey: row.answer_key,
     explanation: row.explanation,
+    cloCode: row.clo_code,
+    chapterLabel: row.chapter_label,
     difficulty: row.difficulty,
     defaultPoints: row.default_points,
+    isAvailable: row.is_available ?? false,
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -80,7 +87,7 @@ export async function listQuestionBankItemsForCourseRepository(courseId: string)
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("question_bank_items")
-    .select("id,course_id,created_by,prompt,question_type,choices,answer_key,explanation,difficulty,default_points,status,created_at,updated_at")
+    .select("id,course_id,created_by,prompt,question_type,choices,answer_key,explanation,clo_code,chapter_label,difficulty,default_points,is_available,status,created_at,updated_at")
     .eq("course_id", courseId)
     .eq("status", "active")
     .order("created_at", { ascending: false })
@@ -101,7 +108,7 @@ export async function listQuestionBankItemsForCoursesRepository(courseIds: strin
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("question_bank_items")
-    .select("id,course_id,created_by,prompt,question_type,choices,answer_key,explanation,difficulty,default_points,status,created_at,updated_at")
+    .select("id,course_id,created_by,prompt,question_type,choices,answer_key,explanation,clo_code,chapter_label,difficulty,default_points,is_available,status,created_at,updated_at")
     .in("course_id", courseIds)
     .eq("status", "active")
     .order("created_at", { ascending: false })
@@ -122,7 +129,9 @@ export async function createQuestionBankItemRepository(input: {
   choices: string[];
   answerKey: unknown;
   explanation?: string;
-  difficulty: QuestionBankRow["difficulty"];
+  cloCode?: string;
+  chapterLabel?: string;
+  difficulty: QuestionDifficulty;
   defaultPoints: number;
 }): Promise<QuestionBankItem> {
   const supabase = await createServerSupabaseClient();
@@ -136,11 +145,14 @@ export async function createQuestionBankItemRepository(input: {
       choices: input.choices,
       answer_key: input.answerKey,
       explanation: input.explanation ?? null,
+      clo_code: input.cloCode ?? null,
+      chapter_label: input.chapterLabel ?? null,
       difficulty: input.difficulty,
       default_points: input.defaultPoints,
+      is_available: true,
       status: "active",
     })
-    .select("id,course_id,created_by,prompt,question_type,choices,answer_key,explanation,difficulty,default_points,status,created_at,updated_at")
+    .select("id,course_id,created_by,prompt,question_type,choices,answer_key,explanation,clo_code,chapter_label,difficulty,default_points,is_available,status,created_at,updated_at")
     .single<QuestionBankRow>();
 
   if (error) {
@@ -161,11 +173,17 @@ export async function attachQuestionBankItemsToAssessmentRepository(input: {
   const supabase = await createServerSupabaseClient();
   const { data: questions, error: questionError } = await supabase
     .from("question_bank_items")
-    .select("id,prompt,question_type,choices,answer_key,explanation,default_points")
+    .select("id,prompt,question_type,choices,answer_key,explanation,default_points,is_available")
     .in("id", input.questionIds);
 
   if (questionError) {
     throw questionError;
+  }
+
+  const unavailableQuestion = (questions ?? []).find((question) => question.is_available !== true);
+
+  if (unavailableQuestion) {
+    throw new Error("Có câu hỏi trong ngân hàng đề chưa được GIÁM SÁT VIÊN bật khả dụng cho giảng viên.");
   }
 
   const rows = (questions ?? []).map((question, index) => ({
@@ -189,6 +207,86 @@ export async function attachQuestionBankItemsToAssessmentRepository(input: {
   if (error) {
     throw error;
   }
+}
+
+export async function updateQuestionBankItemRepository(input: {
+  questionBankItemId: string;
+  prompt: string;
+  questionType: QuestionBankRow["question_type"];
+  choices: string[];
+  answerKey: unknown;
+  explanation?: string;
+  cloCode?: string;
+  chapterLabel?: string;
+  difficulty: QuestionDifficulty;
+  defaultPoints: number;
+}): Promise<QuestionBankItem | null> {
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("question_bank_items")
+    .update({
+      prompt: input.prompt,
+      question_type: input.questionType,
+      choices: input.choices,
+      answer_key: input.answerKey,
+      explanation: input.explanation ?? null,
+      clo_code: input.cloCode ?? null,
+      chapter_label: input.chapterLabel ?? null,
+      difficulty: input.difficulty,
+      default_points: input.defaultPoints,
+    })
+    .eq("id", input.questionBankItemId)
+    .eq("status", "active")
+    .select("id,course_id,created_by,prompt,question_type,choices,answer_key,explanation,clo_code,chapter_label,difficulty,default_points,is_available,status,created_at,updated_at")
+    .maybeSingle<QuestionBankRow>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data ? mapQuestionBankRow(data) : null;
+}
+
+export async function updateQuestionBankItemAvailabilityRepository(input: {
+  questionBankItemId: string;
+  isAvailable: boolean;
+}): Promise<QuestionBankItem | null> {
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("question_bank_items")
+    .update({
+      is_available: input.isAvailable,
+    })
+    .eq("id", input.questionBankItemId)
+    .eq("status", "active")
+    .select("id,course_id,created_by,prompt,question_type,choices,answer_key,explanation,clo_code,chapter_label,difficulty,default_points,is_available,status,created_at,updated_at")
+    .maybeSingle<QuestionBankRow>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data ? mapQuestionBankRow(data) : null;
+}
+
+export async function archiveQuestionBankItemRepository(questionBankItemId: string): Promise<QuestionBankItem | null> {
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("question_bank_items")
+    .update({
+      status: "archived",
+      is_available: false,
+    })
+    .eq("id", questionBankItemId)
+    .eq("status", "active")
+    .select("id,course_id,created_by,prompt,question_type,choices,answer_key,explanation,clo_code,chapter_label,difficulty,default_points,is_available,status,created_at,updated_at")
+    .maybeSingle<QuestionBankRow>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data ? mapQuestionBankRow(data) : null;
 }
 
 export async function upsertCourseAssessmentResultRepository(input: {

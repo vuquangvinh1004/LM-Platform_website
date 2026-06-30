@@ -1199,7 +1199,7 @@ export async function getStudentAssessmentReview(
         answerText: extractAnswerText(answer),
         finalScore: typeof score?.finalScore === "number" ? score.finalScore : score?.autoScore,
         feedback: score?.feedback,
-        explanation: question.questionType === "essay" ? null : question.explanation,
+        explanation: null,
       };
     });
 

@@ -45,7 +45,6 @@
   ],
   "exclude": [
     "node_modules",
-    "design.md-0.1.0",
     "_edumanage-lite-docs"
   ]
 }

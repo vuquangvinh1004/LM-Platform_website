@@ -37,7 +37,7 @@ Phiên bản đầu của ứng dụng tập trung vào:
 - Quản lý học phần: moderator tạo/sửa/lưu trữ/xóa học phần trực tiếp, mô tả học phần, danh sách tài liệu.
 - Quản lý tài liệu: tải lên PDF/slide/file vào thư viện cá nhân, gửi Mod duyệt vào thư viện dùng chung theo học phần, đọc trực tiếp và tải xuống bằng quyền truy cập hợp lệ.
 - Quản lý lớp học: giảng viên gửi yêu cầu mở lớp, Mod/Admin duyệt, gắn lớp với học phần; sinh viên tự gửi yêu cầu tham gia lớp và giảng viên có thể bật `duyệt tự động`; chỉ các lớp được bật `mở đăng ký` mới xuất hiện công khai ở trang đăng nhập.
-- Quản lý bài kiểm tra: gắn link Google Form hoặc Microsoft Form, hoặc chạy internal runtime theo snapshot câu hỏi; lưu thời hạn làm bài, thời lượng, trạng thái mở/đóng, dùng ngân hàng đề thi theo học phần và cho giảng viên `NỘP KẾT QUẢ` lên bảng tổng hợp cấp học phần của Mod.
+- Quản lý bài kiểm tra: gắn link Google Form hoặc Microsoft Form, hoặc chạy internal runtime theo snapshot câu hỏi; ngân hàng đề học phần do Mod quản lý, giảng viên chỉ chọn câu hỏi `Khả dụng` khớp CLO để tạo đề nội bộ; hệ thống lưu thời hạn làm bài, thời lượng, trạng thái mở/đóng và cho giảng viên `NỘP KẾT QUẢ` lên bảng tổng hợp cấp học phần của Mod.
 - Ghi nhận kết quả: nhập thủ công, import CSV hoặc đồng bộ qua webhook ở mức tối thiểu.
 - Dashboard vai trò vận hành: xem số sinh viên, số bài đã làm, điểm, trạng thái hoàn thành, thông báo chung và xuất Excel.
 
@@ -79,18 +79,22 @@ AI Agent và người phát triển phải đọc theo thứ tự sau trước k
 |---|---|
 | `README.md` | Giới thiệu dự án, cách chạy, cách test |
 | `START_HERE_FOR_AI_AGENT.md` | File bắt buộc đọc trước mỗi phiên code |
+| `DESIGN.md` | Glossary và chuẩn thiết kế giao diện dùng thống nhất cho toàn bộ ứng dụng |
 | `REQUIREMENTS.md` | Bản tóm tắt yêu cầu ngắn gọn |
 | `SPEC_FINAL.md` | Đặc tả tổng hợp sản phẩm |
 | `ARCHITECTURE.md` | Nguồn chân lý kiến trúc, tech stack, boundaries, business rules |
 | `ROADMAP.md` | Lộ trình phát triển theo phase/sprint |
+| `roadmap/plans/` | Kế hoạch đào sâu và backlog chi tiết theo phase/sprint cụ thể |
+| `roadmap/evidence/` | Evidence xác thực cho các đợt validation, dry-run và deploy attempt |
+| `roadmap/ops/` | Checklist vận hành, backup/export, production readiness |
 | `DATABASE_SCHEMA.md` | Thiết kế cơ sở dữ liệu chính thức |
 | `SERVICE_CONTRACT.md` | Chuẩn service/API contract |
-| `OPERATIONS_BACKUP_EXPORT_CHECKLIST.md` | Checklist backup/export vận hành Phase 6 |
-| `PRODUCTION_READINESS_CHECKLIST.md` | Checklist production readiness: deploy, rollback, smoke test matrix |
 | `TEACHER_USER_GUIDE.md` | Hướng dẫn sử dụng cho giảng viên (course/class/import/export) |
-| `PHASE6_PRODUCTION_READINESS_EVIDENCE_20260603.md` | Evidence thực thi dry-run deploy, rollback drill và smoke matrix |
-| `PHASE6_PRODUCTION_DEPLOY_ATTEMPT_20260604.md` | Evidence lần tiếp tục production deploy thật: pre-deploy gate pass, cloud deploy bị chặn bởi tooling/credential |
-| `PHASE6_LOCAL_VALIDATION_EVIDENCE_20260604.md` | Evidence local validation sau khi Supabase/app local chạy: integration pass, admin local user-management/auth-profile pass, E2E browser bị chặn bởi môi trường |
+| `roadmap/ops/OPERATIONS_BACKUP_EXPORT_CHECKLIST.md` | Checklist backup/export vận hành Phase 6 |
+| `roadmap/ops/PRODUCTION_READINESS_CHECKLIST.md` | Checklist production readiness: deploy, rollback, smoke test matrix |
+| `roadmap/evidence/PHASE6_PRODUCTION_READINESS_EVIDENCE_20260603.md` | Evidence thực thi dry-run deploy, rollback drill và smoke matrix |
+| `roadmap/evidence/PHASE6_PRODUCTION_DEPLOY_ATTEMPT_20260604.md` | Evidence lần tiếp tục production deploy thật: pre-deploy gate pass, cloud deploy bị chặn bởi tooling/credential |
+| `roadmap/evidence/PHASE6_LOCAL_VALIDATION_EVIDENCE_20260604.md` | Evidence local validation sau khi Supabase/app local chạy: integration pass, admin local user-management/auth-profile pass, E2E browser bị chặn bởi môi trường |
 
 ---
 
@@ -175,6 +179,10 @@ learning-management-platform/
 ├── ROADMAP.md
 ├── DATABASE_SCHEMA.md
 ├── SERVICE_CONTRACT.md
+├── roadmap/
+│   ├── plans/
+│   ├── evidence/
+│   └── ops/
 │
 ├── app/
 │   ├── (auth)/

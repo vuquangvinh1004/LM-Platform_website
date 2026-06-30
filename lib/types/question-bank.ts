@@ -1,7 +1,13 @@
 import type { SubmissionSource, SubmissionStatus } from "@/lib/types/submission";
 
 export type QuestionType = "multiple_choice" | "true_false" | "short_answer" | "essay";
-export type QuestionDifficulty = "easy" | "medium" | "hard";
+export type QuestionDifficulty =
+  | "remembering"
+  | "understanding"
+  | "applying"
+  | "analyzing"
+  | "evaluating"
+  | "creating";
 
 export type QuestionBankItem = {
   id: string;
@@ -12,8 +18,11 @@ export type QuestionBankItem = {
   choices: string[];
   answerKey: unknown;
   explanation: string | null;
+  cloCode: string | null;
+  chapterLabel: string | null;
   difficulty: QuestionDifficulty;
   defaultPoints: number;
+  isAvailable: boolean;
   status: "active" | "archived";
   createdAt: string;
   updatedAt: string;

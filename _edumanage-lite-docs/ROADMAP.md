@@ -408,7 +408,7 @@ Acceptance:
 
 Backlog chi tiết + checklist implementation theo file-level:
 
-- [x] Xem tài liệu `SPRINT_5_1_CLASSROOM_VISUAL_BACKLOG.md` và triển khai theo checklist.
+- [x] Xem tài liệu `roadmap/plans/SPRINT_5_1_CLASSROOM_VISUAL_BACKLOG.md` và triển khai theo checklist.
 
 ### Sprint 5.2: Widget mẫu
 
@@ -467,12 +467,12 @@ Acceptance:
 
 Ghi chu tien do Phase 6:
 
-- [x] Da them `OPERATIONS_BACKUP_EXPORT_CHECKLIST.md` cho backup/export van hanh som.
-- [x] Da them `PRODUCTION_READINESS_CHECKLIST.md` gom deploy runbook + rollback + smoke test matrix.
+- [x] Da them `roadmap/ops/OPERATIONS_BACKUP_EXPORT_CHECKLIST.md` cho backup/export van hanh som.
+- [x] Da them `roadmap/ops/PRODUCTION_READINESS_CHECKLIST.md` gom deploy runbook + rollback + smoke test matrix.
 - [x] Da them `TEACHER_USER_GUIDE.md` huong dan import sinh vien/ket qua cho giang vien.
-- [x] Da co evidence dry-run trong `PHASE6_PRODUCTION_READINESS_EVIDENCE_20260603.md`.
-- [x] Da co evidence tiep tuc production deploy attempt trong `PHASE6_PRODUCTION_DEPLOY_ATTEMPT_20260604.md`: lint/unit/security/build pass, cloud rollout bi chan boi Vercel/Supabase tooling/credential va Docker permission.
-- [x] Da co evidence local validation trong `PHASE6_LOCAL_VALIDATION_EVIDENCE_20260604.md`: app health pass, Supabase local reachable, integration pass, admin user-management/auth-profile pass; E2E browser automation bi chan boi `spawn EPERM`.
+- [x] Da co evidence dry-run trong `roadmap/evidence/PHASE6_PRODUCTION_READINESS_EVIDENCE_20260603.md`.
+- [x] Da co evidence tiep tuc production deploy attempt trong `roadmap/evidence/PHASE6_PRODUCTION_DEPLOY_ATTEMPT_20260604.md`: lint/unit/security/build pass, cloud rollout bi chan boi Vercel/Supabase tooling/credential va Docker permission.
+- [x] Da co evidence local validation trong `roadmap/evidence/PHASE6_LOCAL_VALIDATION_EVIDENCE_20260604.md`: app health pass, Supabase local reachable, integration pass, admin user-management/auth-profile pass; E2E browser automation bi chan boi `spawn EPERM`.
 - [x] Da them route `/library` lam hub Thu vien cho teacher/moderator/admin: tong hop tai lieu + simulation, link ve upload/registry, va review tich hop `_Mo_phong_VL6.html`.
 - [x] Da them workflow upload tai lieu/mo phong HTML trong Thu vien: bo trong hoc phan thi luu thu vien ca nhan; chon hoc phan thi gui yeu cau duyet vao Thu vien dung chung. Migration `202606070001_personal_library_upload_review.sql` bo sung `materials.review_status`, `materials.course_id` nullable va `simulation_uploads.requested_course_id`.
 - [x] Da them workflow `library_change_requests`: giang vien co the gui yeu cau an/xoa tai lieu/mo phong; Moderator co quyen an truc tiep tai nguyen dung chung, con yeu cau xoa van do Admin duyet hoac xu ly truc tiep.
@@ -481,6 +481,7 @@ Ghi chu tien do Phase 6:
 - [x] Da them metadata `library_categories` + `tags` cho tai lieu, mo phong va simulation upload; trang Thu vien co bo loc danh muc/tag cho giang vien/Mod/Admin.
 - [x] Da bo sung khoi `Thong bao` dung chung tren dashboard Admin/Mod/Giang vien; Admin va Mod duoc gui thong bao, Giang vien chi doc.
 - [x] Da bo sung module `Kiem tra` theo hoc phan: ngan hang de thi + kho tong hop ket qua kiem tra theo hoc phan.
+- [x] Da tach ro quyen ngan hang de theo policy moi: Mod tao/quan ly cau hoi theo hoc phan, teacher chi chon cau hoi `Khả dụng` khop `CLO` de lap bai kiem tra noi bo; bo sung metadata `CLO`, `Chuong`, `Muc do` Bloom 6 muc, diem mac dinh theo muc do va bang thong ke cau truc de trong man tao assessment.
 - [x] Da bo sung `Thu vien ca nhan` gan voi tai khoan giang vien, quota mac dinh 50 MB va Admin co the dieu chinh.
 - [x] Da doi huong tu `Auth` don thuan sang `User management` day du cho Admin: tao tai khoan giang vien, tao/cap quyen moderator, quan ly vai tro va truy cap.
 - [x] Da chuan hoa UI Thu vien giang vien: bo card tong quan Duyet xoa, them loc theo hoc phan, danh sach Tai lieu/Mo phong dung khung cuon co dinh, va form tai tai lieu/mo phong HTML dong bo thu tu truong + vi tri nut gui.
@@ -506,7 +507,7 @@ Ghi chu tien do Phase 6:
 
 Ghi chu tong ket tien do:
 
-- He thong da xong lop cong viec cu theu: user management, course/class/material/library/simulation, assessment external, result import/export, classroom visual layout va dashboard.
+- He thong da xong lop cong viec cu theu: user management, course/class/material/library/simulation, assessment external/internal, question bank metadata/availability, result import/export, classroom visual layout va dashboard.
 - Phan con lai cua Phase 6 chu yeu la hardening: performance, ops, deploy, smoke test va cleanup UX.
 - Uoc tinh hoan thien tong the hien tai nam trong khoang `85% - 90%`, tuy theo cach tinh co tinh ca operations polish hay khong.
 

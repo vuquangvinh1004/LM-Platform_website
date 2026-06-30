@@ -891,6 +891,8 @@ Quy tắc:
 - Validate provider domain nếu là Google/MS Form.
 - Neu `deliveryMode = 'internal'` thi service normalize `provider = 'internal'`, xoa `formUrl` va force `embedMode = 'disabled'`.
 - Neu `deliveryMode = 'external'` thi van giu nguyen luong Google Form / Microsoft Form / external source hien co.
+- Neu `deliveryMode = 'external'` thi UI khong hien khung chon cau hoi tu ngan hang de hoc phan.
+- Neu `deliveryMode = 'internal'` thi teacher duoc chon cau hoi tu ngan hang de cua dung hoc phan va UI hien bang thong ke theo `CLO`, `Chuong`, `Muc do` dua tren cac cau hoi dang chon.
 - Nếu form không hỗ trợ iframe, dùng `new_tab`.
 - Default status: `draft` hoặc `open` theo input.
 - Mỗi assessment thuộc đúng một `courseId` và một `classId`.
@@ -983,44 +985,116 @@ listQuestionBankItems(input: {
 
 Mục đích: trả về ngân hàng đề thi theo học phần.
 
-### 9A.2. `upsertQuestionBankItem()`
+Quy tắc:
+
+- `moderator` xem toàn bộ câu hỏi trong hoc phan de van hanh.
+- `teacher` chi doc de phuc vu luong tao assessment noi bo.
+- Danh sach teacher-facing chi su dung cac cau hoi `status = active` va `is_available = true`; neu assessment co `assessment_clo_codes` thi UI tiep tuc loc theo `clo_code`.
+
+### 9A.2. `createQuestionBankItem()`
 
 ```ts
-upsertQuestionBankItem(input: {
-  questionId?: string;
+createQuestionBankItem(input: {
   courseId: string;
   actorId: string;
-  actorRole: Extract<UserRole, 'admin' | 'moderator' | 'teacher'>;
+  actorRole: Extract<UserRole, 'moderator'>;
   content: string;
-  questionType: 'single_choice' | 'multiple_choice' | 'short_answer' | 'essay' | 'other';
-  difficultyLevel?: 'easy' | 'medium' | 'hard';
-  answerOptions?: Array<{ key: string; content: string; isCorrect?: boolean }>;
+  questionType: 'multiple_choice' | 'true_false' | 'short_answer' | 'essay';
+  answerOptions?: Array<{ content: string; isCorrect?: boolean }>;
   explanation?: string;
-  tags?: string[];
+  cloCode?: string;
+  chapterLabel?: string;
+  difficulty: 'remembering' | 'understanding' | 'applying' | 'analyzing' | 'evaluating' | 'creating';
+  defaultPoints: number;
 }): Promise<ServiceResult<QuestionBankItem>>
 ```
 
 Quy tắc:
 
-- `teacher` chỉ thêm/sửa câu hỏi trong học phần mình phụ trách.
-- `moderator` và `admin` được xem và quản lý theo scope/phạm vi toàn cục.
-- Câu hỏi chỉ được gắn vào assessment cùng `courseId`.
+- Chỉ `moderator` được tạo câu hỏi trong ngân hàng đề học phần.
+- `explanation` la ghi chu noi bo, khong phai feedback hien thi cho sinh vien.
+- `multiple_choice` ho tro ca hai kieu authoring UI: `Nhiều lựa chọn` va `Nhiều đáp án`, phan biet bang so dap an dung trong `answer_key`.
+- Rang buoc dang cau hoi va muc do:
+  - `true_false`: `remembering`, `understanding`
+  - `multiple_choice` don dap an: `remembering`, `understanding`, `applying`
+  - `multiple_choice` nhieu dap an: `remembering`, `understanding`, `applying`, `analyzing`
+  - `short_answer`: `applying`, `analyzing`, `evaluating`
+  - `essay`: `analyzing`, `evaluating`, `creating`
+- Diem mac dinh goi y theo muc do:
+  - `remembering = 1`
+  - `understanding = 2`
+  - `applying = 4`
+  - `analyzing = 6`
+  - `evaluating = 8`
+  - `creating = 10`
 
-### 9A.3. `assignQuestionsToAssessment()`
+### 9A.3. `updateQuestionBankItem()`
 
 ```ts
-assignQuestionsToAssessment(input: {
-  assessmentId: string;
-  courseId: string;
+updateQuestionBankItem(input: {
+  questionBankItemId: string;
   actorId: string;
-  actorRole: Extract<UserRole, 'admin' | 'moderator' | 'teacher'>;
+  actorRole: Extract<UserRole, 'moderator'>;
+  prompt: string;
+  questionType: 'multiple_choice' | 'true_false' | 'short_answer' | 'essay';
+  choices: string[];
+  answerKey: unknown;
+  explanation?: string;
+  cloCode?: string;
+  chapterLabel?: string;
+  difficulty: 'remembering' | 'understanding' | 'applying' | 'analyzing' | 'evaluating' | 'creating';
+  defaultPoints: number;
+}): Promise<ServiceResult<QuestionBankItem>>
+```
+
+Quy tắc:
+
+- Chỉ `moderator` được cập nhật nội dung và metadata câu hỏi.
+- Khi lỗi validation/xu ly, UI giu lai du lieu dang nhap de Mod sua thay vi reset toan bo form.
+
+### 9A.4. `updateQuestionBankItemAvailability()`
+
+```ts
+updateQuestionBankItemAvailability(input: {
+  questionBankItemId: string;
+  actorRole: Extract<UserRole, 'moderator'>;
+  isAvailable: boolean;
+}): Promise<ServiceResult<QuestionBankItem>>
+```
+
+Quy tắc:
+
+- Chỉ `moderator` được bật/tắt `Khả dụng`.
+- `teacher` chi nhin thay va chon cau hoi khi `isAvailable = true`.
+
+### 9A.5. `archiveQuestionBankItem()`
+
+```ts
+archiveQuestionBankItem(input: {
+  questionBankItemId: string;
+  actorRole: Extract<UserRole, 'moderator'>;
+}): Promise<ServiceResult<QuestionBankItem>>
+```
+
+Quy tắc:
+
+- Chỉ `moderator` được xóa logic câu hỏi khỏi ngân hàng đề.
+- Cau hoi bi archive khong con xuat hien trong danh sach de teacher chon.
+
+### 9A.6. `attachQuestionBankItemsToAssessment()`
+
+```ts
+attachQuestionBankItemsToAssessment(input: {
+  assessmentId: string;
   questionIds: string[];
-}): Promise<ServiceResult<{ assessmentId: string; linked: number }>>
+}): Promise<ServiceResult<{ linked: number }>>
 ```
 
 Quy tắc:
 
 - Chỉ cho phép lấy câu hỏi từ ngân hàng đề thi của đúng học phần.
+- Chi ap dung cho assessment `deliveryMode = 'internal'`.
+- Tap `questionIds` hop le phai thuoc cac cau hoi `active`, `is_available = true`; neu assessment co `assessment_clo_codes` thi moi cau hoi phai co `clo_code` nam trong tap do.
 - Lệnh này không xóa bài kiểm tra; chỉ đồng bộ liên kết `assessment_question_links`.
 
 ### 8.2. `getAssessmentForStudent()`

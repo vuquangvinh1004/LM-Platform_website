@@ -589,6 +589,11 @@ export default async function TeacherDashboardPage(
             Thư viện
           </Link>
         ) : null}
+        {isModerator ? (
+          <Link className="inline-flex rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700" href="/assessments">
+            Ngân hàng đề thi
+          </Link>
+        ) : null}
         {!isModerator ? (
           <Link className="inline-flex rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700" href="/assessments">
             Quản lý bài kiểm tra

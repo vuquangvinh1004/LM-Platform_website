@@ -9,7 +9,7 @@ import { listQuestionBankItemsForCourses } from "@/lib/services/question-bank-se
 import type { QuestionBankItem } from "@/lib/types/question-bank";
 
 export default async function AssessmentsPage() {
-  const profileResult = await requireRole(["teacher", "admin"]);
+  const profileResult = await requireRole(["teacher", "moderator", "admin"]);
 
   if (!profileResult.ok) {
     return (
@@ -20,13 +20,16 @@ export default async function AssessmentsPage() {
     );
   }
 
+  const shouldLoadClasses = profileResult.data.role === "teacher";
   const [classesResult, assessmentsResult, coursesResult] = await Promise.all([
-    listClassesForUser({
-      actorId: profileResult.data.id,
-      actorRole: profileResult.data.role,
-      page: 1,
-      pageSize: 100,
-    }),
+    shouldLoadClasses
+      ? listClassesForUser({
+          actorId: profileResult.data.id,
+          actorRole: profileResult.data.role,
+          page: 1,
+          pageSize: 100,
+        })
+      : Promise.resolve({ ok: true as const, data: { items: [] } }),
     listAssessmentsForManager({
       actorId: profileResult.data.id,
       actorRole: profileResult.data.role,
@@ -58,21 +61,14 @@ export default async function AssessmentsPage() {
     );
   }
 
-  const uniqueCourses = Array.from(
-    new Map(
-      classesResult.data.items.map((courseClass) => [
-        courseClass.courseId,
-        {
-          courseId: courseClass.courseId,
-          courseCode: courseClass.courseCode,
-          courseTitle: courseClass.courseTitle,
-        },
-      ]),
-    ).values(),
-  );
+  const questionBankCourses = coursesResult.data.items.map((course) => ({
+    courseId: course.id,
+    courseCode: course.code,
+    courseTitle: course.title,
+  }));
 
   const questionBankResult = await listQuestionBankItemsForCourses({
-    courseIds: uniqueCourses.map((course) => course.courseId),
+    courseIds: questionBankCourses.map((course) => course.courseId),
   });
   const questionBankItemsByCourseId = new Map<string, QuestionBankItem[]>();
 
@@ -90,7 +86,9 @@ export default async function AssessmentsPage() {
         {profileResult.data.role !== "admin" ? (
           <div className="flex flex-wrap gap-4">
             <BackTextLink href="/classes">Quay về Quản lý lớp</BackTextLink>
-            <BackTextLink href="/dashboard">Quay về Tổng quan giảng viên</BackTextLink>
+            <BackTextLink href="/dashboard">
+              {profileResult.data.role === "moderator" ? "Quay về Tổng quan giám sát" : "Quay về Tổng quan giảng viên"}
+            </BackTextLink>
           </div>
         ) : (
           <div />
@@ -98,8 +96,14 @@ export default async function AssessmentsPage() {
         {profileResult.data.role === "admin" ? <AdminAreaLink /> : null}
       </div>
       <div className="mb-6 mt-4">
-        <h1 className="text-2xl font-semibold text-slate-900">Quản lý bài kiểm tra</h1>
-        <p className="mt-1 text-sm text-slate-600">Tạo và quản lý liên kết bài kiểm tra Google Form hoặc Microsoft Form.</p>
+        <h1 className="text-2xl font-semibold text-slate-900">
+          {profileResult.data.role === "moderator" ? "Ngân hàng đề thi" : "Quản lý bài kiểm tra"}
+        </h1>
+        <p className="mt-1 text-sm text-slate-600">
+          {profileResult.data.role === "moderator"
+            ? "GIÁM SÁT VIÊN quản lý ngân hàng câu hỏi theo học phần để giảng viên chọn khi tạo bài kiểm tra."
+            : "Tạo và quản lý liên kết bài kiểm tra; với đề nội bộ, giảng viên chỉ chọn câu hỏi từ ngân hàng đề theo học phần."}
+        </p>
       </div>
 
       <AssessmentManagementClient
@@ -113,7 +117,7 @@ export default async function AssessmentsPage() {
           assessmentComponents: course.assessmentComponents,
         }))}
         assessments={assessmentsResult.data.items}
-        questionBankByCourse={uniqueCourses.map((course) => ({
+        questionBankByCourse={questionBankCourses.map((course) => ({
           courseId: course.courseId,
           courseCode: course.courseCode,
           courseTitle: course.courseTitle,

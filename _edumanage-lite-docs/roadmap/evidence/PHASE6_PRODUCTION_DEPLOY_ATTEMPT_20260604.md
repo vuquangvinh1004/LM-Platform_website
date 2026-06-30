@@ -1,6 +1,6 @@
 # Phase 6 Production Deploy Attempt (2026-06-04)
 
-Tai lieu nay ghi lai ket qua tiep tuc production rollout that theo `PRODUCTION_READINESS_CHECKLIST.md`.
+Tai lieu nay ghi lai ket qua tiep tuc production rollout that theo `roadmap/ops/PRODUCTION_READINESS_CHECKLIST.md`.
 
 ## 1. Tom tat ket qua
 

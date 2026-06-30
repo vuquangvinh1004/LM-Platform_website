@@ -232,8 +232,12 @@ Student opens material page
 ```text
 Teacher submits assessment form
   → UI validates basic input
-  → AssessmentService validates provider URL and teacher permission
+  → Nếu chọn external: AssessmentService validates provider URL and teacher permission
+  → Nếu chọn internal: UI chỉ mở khối chọn câu hỏi ngân hàng đề, lọc theo học phần + CLO + trạng thái Khả dụng
+  → UI tính bảng thống kê theo CLO / Chương / Mức độ từ tập câu hỏi đang chọn
+  → AssessmentService validates teacher permission và snapshot dữ liệu assessment
   → Repository creates assessment record
+  → Repository syncs assessment_question_links nếu là internal
   → Activity log records creation
   → UI redirects to assessment detail
 ```
@@ -275,8 +279,8 @@ Không dựa vào UI-only guard cho dữ liệu nhạy cảm.
 | Role | Mô tả |
 |---|---|
 | `student` | Truy cập học tập theo membership hợp lệ và trạng thái truy cập còn hiệu lực |
-| `teacher` | Quản lý lớp mình phụ trách, gửi yêu cầu mở lớp, tạo tài nguyên, ngân hàng đề, bài kiểm tra |
-| `moderator` | Giám sát viên vận hành học phần trực tiếp, vận hành Thư viện dùng chung theo học phần, xem kết quả đánh giá học phần và gửi thông báo chung |
+| `teacher` | Quản lý lớp mình phụ trách, gửi yêu cầu mở lớp, tạo tài nguyên, tạo bài kiểm tra và chọn câu hỏi khả dụng từ ngân hàng đề học phần |
+| `moderator` | Giám sát viên vận hành học phần trực tiếp, quản lý ngân hàng đề học phần, vận hành Thư viện dùng chung theo học phần, xem kết quả đánh giá học phần và gửi thông báo chung |
 | `admin` | Quản trị viên hệ thống: quản lý tài khoản, quota thư viện cá nhân, cấp scope và theo dõi báo cáo tổng hợp |
 
 Ghi chú: role `assistant` cũ được thay thế bởi `moderator` để khớp nghiệp vụ thực tế.
@@ -387,14 +391,17 @@ Không nuốt lỗi im lặng. Không hiển thị stack trace cho người dùn
 7. Admin không tạo lớp trực tiếp trong workflow chuẩn; giảng viên gửi yêu cầu mở lớp, Mod/Admin duyệt. Học phần là ngoại lệ mới: Mod quản lý trực tiếp, Admin không duyệt học phần. Với thư viện và mô phỏng HTML, Mod xử lý vận hành tài nguyên dùng chung theo học phần, gồm duyệt, ẩn và xóa trực tiếp tài nguyên dùng chung; Admin chỉ giữ governance hệ thống như danh mục và tích hợp native.
 8. Khi giảng viên chọn tài nguyên cho lớp từ `Màn chiếu`, `Tủ tài liệu`, `Thành phần của bài giảng` hoặc `Tài liệu đọc thêm`, trang `Tài nguyên lớp học` chỉ hiển thị tài nguyên `dùng chung` và tài nguyên của đúng học phần lớp đó để tránh nhiễu khi thư viện tăng quy mô.
 9. Mỗi học phần có ngân hàng đề riêng và một bảng tổng hợp `Kết quả đánh giá học phần` do Mod theo dõi.
-9. Kết quả assessment của lớp chỉ đi vào bảng tổng hợp cấp học phần sau khi giảng viên chủ động `NỘP KẾT QUẢ`; bảng mirror nội bộ không còn được xem như một module teacher-facing riêng.
-10. Mỗi giảng viên có thư viện cá nhân với quota riêng.
-11. Học phần/lớp/tài liệu/bài kiểm tra có dữ liệu liên quan không được hard-delete.
-12. File tài liệu private mặc định.
-13. Bài kiểm tra v1 là external form link, không phải native quiz.
-14. Import kết quả phải idempotent.
-15. Dashboard không được tính điểm từ dữ liệu lỗi/chưa xác thực.
-16. Mọi thay đổi schema phải đi kèm migration và cập nhật `DATABASE_SCHEMA.md`.
+10. Chỉ `moderator` được tạo/chỉnh sửa/xóa câu hỏi của ngân hàng đề; `teacher` chỉ chọn câu hỏi `Khả dụng` khi tạo bài kiểm tra nội bộ.
+11. Với assessment nội bộ, danh sách câu hỏi teacher nhìn thấy phải đồng thời thỏa: cùng học phần, `status = active`, `is_available = true`, và nếu assessment đã snapshot CLO thì `question.clo_code` phải nằm trong danh sách đó.
+12. `explanation` của câu hỏi ngân hàng đề được dùng như ghi chú nội bộ cho người soạn đề, không render cho sinh viên trong runtime bài kiểm tra.
+13. Kết quả assessment của lớp chỉ đi vào bảng tổng hợp cấp học phần sau khi giảng viên chủ động `NỘP KẾT QUẢ`; bảng mirror nội bộ không còn được xem như một module teacher-facing riêng.
+14. Mỗi giảng viên có thư viện cá nhân với quota riêng.
+15. Học phần/lớp/tài liệu/bài kiểm tra có dữ liệu liên quan không được hard-delete.
+16. File tài liệu private mặc định.
+17. Bài kiểm tra v1 ưu tiên external form link; internal runtime được triển khai theo snapshot câu hỏi thay vì quiz engine native toàn diện.
+18. Import kết quả phải idempotent.
+19. Dashboard không được tính điểm từ dữ liệu lỗi/chưa xác thực.
+20. Mọi thay đổi schema phải đi kèm migration và cập nhật `DATABASE_SCHEMA.md`.
 
 ### 11.1. Nguyên tắc profile sinh viên nhẹ
 

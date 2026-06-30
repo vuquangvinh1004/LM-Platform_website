@@ -309,7 +309,7 @@ export async function getLibraryOverview(input?: { actorId: string; actorRole: U
             "Đang dùng Tailwind CDN và FontAwesome CDN, không phù hợp với build Next.js production hiện tại.",
             "Dùng nhiều inline onclick và hàm global, dễ xung đột khi đặt trong App Router.",
             "Dùng canvas và DOM API trực tiếp, cần đóng gói trong client component với lifecycle rõ ràng.",
-            "Bảng màu slate/indigo đậm lệch nhẹ so với DESIGN.md hiện tại, cần map lại token màu/spacing.",
+            "Bảng màu slate/indigo đậm lệch nhẹ so với _edumanage-lite-docs/DESIGN.md hiện tại, cần map lại token màu/spacing.",
           ],
           recommendedSteps: [
             "Tách logic vật lý thành helper thuần để test được.",
